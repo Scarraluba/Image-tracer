@@ -23,9 +23,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   gazeData,
 }) => {
   return (
-    <footer className="h-7 bg-slate-950 border-t border-slate-800 px-3 flex items-center justify-between text-[11px] font-mono text-slate-400 select-none z-20">
+    <footer className="absolute bottom-16 left-0 right-0 z-20 h-7 bg-slate-950/95 border-t border-slate-800 px-3 hidden md:flex items-center justify-between text-[11px] font-mono text-slate-400 select-none pointer-events-none">
       {/* Left: Active Character & Multi-Character Count */}
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-4 overflow-hidden">
         <div className="flex items-center gap-1.5">
           <User className="w-3 h-3 text-sky-400" />
           <span className="text-slate-500">Active:</span>
@@ -48,7 +48,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
         <div className="flex items-center gap-1.5">
           <span className="text-slate-500">Mode:</span>
-          <span className={activeCharacter?.isUnifiedMode ? 'text-purple-400 font-semibold' : 'text-sky-400 font-semibold'}>
+          <span className={`truncate max-w-[220px] ${activeCharacter?.isUnifiedMode ? 'text-purple-400 font-semibold' : 'text-sky-400 font-semibold'}`}>
             {activeCharacter?.isUnifiedMode ? 'Unified Continuous Body' : 'Prototype Anatomical Lofts'}
           </span>
         </div>

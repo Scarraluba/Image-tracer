@@ -17,6 +17,7 @@ export interface ViewportSettings {
   showAxes: boolean;
   showGrid: boolean;
   showTargetPlane: boolean;
+  showCharacters?: boolean;
   wireframe: boolean;
   targetPlaneZ: number;
 }
@@ -159,6 +160,11 @@ export class EyeScene {
     this.updateAllCharacters();
 
     window.addEventListener('resize', this.handleResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(this.handleResize);
+      this.resizeObserver.observe(this.container);
+    }
+    this.handleResize();
     this.startLoop();
   }
 
@@ -454,6 +460,7 @@ export class EyeScene {
     for (const char of this.characters) {
       const node = this.characterNodes.get(char.id);
       if (!node) continue;
+      node.group.visible = this.currentSettings.showCharacters !== false;
 
       // 1. Update visibility of modes
       if (node.unifiedMesh) {
@@ -792,6 +799,8 @@ export class EyeScene {
     return { vertices, triangles };
   }
 
+  private resizeObserver?: ResizeObserver;
+
   private handleResize = (): void => {
     if (this.isDisposed || !this.container) return;
     const w = this.container.clientWidth;
@@ -893,6 +902,7 @@ export class EyeScene {
     this.isDisposed = true;
     cancelAnimationFrame(this.animFrameId);
     window.removeEventListener('resize', this.handleResize);
+    this.resizeObserver?.disconnect();
 
     if (this.refImageGroup) {
       this.scene.remove(this.refImageGroup);

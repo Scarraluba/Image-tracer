@@ -24,6 +24,8 @@ import {
   ImageIcon,
   FolderOpen,
   Target,
+  EyeOff,
+  Grid3X3,
 } from 'lucide-react';
 import { ViewportSettings } from '../rendering/EyeScene';
 import { CharacterModel } from '../body/CharacterModel';
@@ -173,6 +175,16 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
       </div>
 
       {/* Right Actions: Target Board Toggle, Ref Image, PWA Install, Diagnostics & Export */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button onClick={() => onUpdateSettings({ showCharacters: !(settings.showCharacters ?? true) })} className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs transition-colors ${settings.showCharacters !== false ? 'bg-sky-950/70 text-sky-300 border-sky-700/70' : 'bg-slate-800 text-slate-400 border-slate-700'}`} title={settings.showCharacters !== false ? 'Hide characters' : 'Show characters'} aria-label={settings.showCharacters !== false ? 'Hide characters' : 'Show characters'}>
+          {settings.showCharacters !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          <span className="hidden xl:inline">{settings.showCharacters !== false ? 'Hide actors' : 'Show actors'}</span>
+        </button>
+        <button onClick={() => onUpdateSettings({ wireframe: !settings.wireframe })} className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs transition-colors ${settings.wireframe ? 'bg-cyan-950/70 text-cyan-300 border-cyan-700/70' : 'bg-slate-800 text-slate-400 border-slate-700'}`} title={settings.wireframe ? 'Disable wireframe' : 'Enable wireframe'} aria-label={settings.wireframe ? 'Disable wireframe' : 'Enable wireframe'}>
+          <Grid3X3 className="w-3.5 h-3.5" />
+          <span className="hidden xl:inline">Wire</span>
+        </button>
+      </div>
       <div className="flex items-center gap-1.5">
         {/* Toggle Target Board Visibility */}
         {onToggleTargetPlane && (

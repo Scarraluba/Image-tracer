@@ -77,9 +77,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-slate-950 select-none">
+    <div className="relative w-full h-full min-h-0 min-w-0 overflow-hidden bg-slate-950 select-none">
       {/* 3D WebGL Canvas */}
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      <div ref={mountRef} className="absolute inset-0 w-full h-full min-h-0 min-w-0 cursor-grab active:cursor-grabbing" />
 
       {/* Floating HUD - Camera Presets */}
       <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg p-1 text-xs text-slate-300 shadow-xl z-10">

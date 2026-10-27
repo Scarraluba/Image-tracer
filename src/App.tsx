@@ -56,6 +56,7 @@ export default function App() {
     showAxes: true,
     showGrid: true,
     showTargetPlane: true,
+    showCharacters: true,
     wireframe: false,
     targetPlaneZ: 120.0,
   });
@@ -325,7 +326,7 @@ export default function App() {
   }, [activeChar]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
+    <div className="flex flex-col h-[100dvh] min-h-0 w-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
       {/* Offline Mode Indicator */}
       <OfflineIndicator />
 
@@ -358,12 +359,12 @@ export default function App() {
       />
 
       {/* Main Workspace with Dynamic Responsive Layout */}
-      <div className="flex-1 flex overflow-hidden relative pb-16">
+      <div className="relative flex-1 min-h-0 min-w-0 flex overflow-hidden pb-16">
         {/* LAYOUT 1: SPLIT VIEW (Left 3D Preview | Right Selected Panel) */}
         {layoutMode === 'split' && (
-          <div className="flex-1 flex flex-col md:flex-row h-full w-full overflow-hidden">
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col md:flex-row h-full w-full overflow-hidden">
             {/* Left Column: 3D Preview (65% on mobile, full height on desktop) */}
-            <div className="flex-1 h-[65%] md:h-full relative border-b md:border-b-0 md:border-r border-slate-800">
+            <div className="flex-1 min-h-0 min-w-0 h-[65%] md:h-full relative border-b md:border-b-0 md:border-r border-slate-800">
               <Viewport3D
                 characters={characters}
                 activeCharacterId={activeCharacterId}
@@ -428,7 +429,7 @@ export default function App() {
 
         {/* LAYOUT 2: PREVIEW ONLY (Full Viewport, with Bottom Drawer when tabs tapped) */}
         {layoutMode === 'preview' && (
-          <div className="flex-1 h-full w-full relative">
+          <div className="flex-1 min-h-0 min-w-0 h-full w-full relative">
             <Viewport3D
               characters={characters}
               activeCharacterId={activeCharacterId}
@@ -469,7 +470,7 @@ export default function App() {
 
         {/* LAYOUT 3: PANEL ONLY */}
         {layoutMode === 'panel' && (
-          <div className="flex-1 h-full w-full max-w-2xl mx-auto bg-slate-900/95 flex flex-col overflow-hidden border-x border-slate-800">
+          <div className="flex-1 min-h-0 min-w-0 h-full w-full max-w-2xl mx-auto bg-slate-900/95 flex flex-col overflow-hidden border-x border-slate-800">
             <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
@@ -510,7 +511,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Floating Analytical Status Bar Overlay */}
+        {/* Compact status overlay; do not let diagnostics consume viewport layout width */}
         <StatusBar
           activeCharacter={activeChar}
           characterCount={characters.length}
