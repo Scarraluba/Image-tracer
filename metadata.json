@@ -1,0 +1,6 @@
+{
+  "name": "EYEW — 3D Anatomical Eye Geometry Engine",
+  "description": "A high-precision 3D geometric eye modelling and gaze-ray analysis engine with procedural geometry, mathematical coordinate transforms, and real-time ray-surface intersection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
