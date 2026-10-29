@@ -34,6 +34,10 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       title: 'Anatomical Proportions',
       subtitle: `Height: ${character.proportions.totalHeight} units`,
     },
+    anatomy: {
+      title: 'Body Parts & Wireframe Matrix',
+      subtitle: 'Per-Part Wireframe, Solo & Visibility',
+    },
     gaze: {
       title: 'Dual-Eye Gaze Kinematics',
       subtitle: `Head & Eye Orientation`,

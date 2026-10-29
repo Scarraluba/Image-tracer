@@ -7,11 +7,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CharacterModel, CharacterGazeData, TargetAreaSpecs } from '../body/CharacterModel';
 import { Vec3 } from '../math/Vec3';
+import { Mat4 } from '../math/Mat4';
 import { ThreeAdapter } from './ThreeAdapter';
 import { SphereGenerator } from '../geometry/SphereGenerator';
 import { DiscGenerator } from '../geometry/DiscGenerator';
 import { CorneaGenerator } from '../geometry/CorneaGenerator';
 import { ReferenceImageConfig } from '../reference/ReferenceImageModel';
+import { SoccerBallGenerator } from '../geometry/SoccerBallGenerator';
 
 export interface ViewportSettings {
   showAxes: boolean;
@@ -19,6 +21,21 @@ export interface ViewportSettings {
   showTargetPlane: boolean;
   wireframe: boolean;
   targetPlaneZ: number;
+  showSoccerBall: boolean;
+  soccerBallRadius?: number;
+}
+
+export interface SceneGazeAverage {
+  centerPoint: Vec3;
+  targetPlaneHitAverage?: {
+    worldX: number;
+    worldY: number;
+    worldZ: number;
+    pixelX: number;
+    pixelY: number;
+  };
+  rayCount: number;
+  characterCount: number;
 }
 
 export class EyeScene {
@@ -63,11 +80,15 @@ export class EyeScene {
     }
   > = new Map();
 
+  // 3D Soccer Ball at Multi-Character Gaze Averaged Center Point
+  private soccerBallGroup?: THREE.Group;
+  private latestGazeAverage?: SceneGazeAverage;
+
   private characters: CharacterModel[] = [];
   private activeCharacterId: string = '';
   private currentSettings: ViewportSettings;
   private onCameraChange?: (camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => void;
-  private onGazeEvaluated?: (data: CharacterGazeData) => void;
+  private onGazeEvaluated?: (data: CharacterGazeData, averageGaze?: SceneGazeAverage) => void;
 
   constructor(
     container: HTMLElement,
@@ -75,7 +96,7 @@ export class EyeScene {
     initialSettings: ViewportSettings,
     callbacks?: {
       onCameraChange?: (camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => void;
-      onGazeEvaluated?: (data: CharacterGazeData) => void;
+      onGazeEvaluated?: (data: CharacterGazeData, averageGaze?: SceneGazeAverage) => void;
     }
   ) {
     this.container = container;
@@ -150,7 +171,14 @@ export class EyeScene {
     this.targetPlaneHitDots = this.setupTargetPlane();
     this.scene.add(this.targetPlaneGroup);
 
-    // 7. Build Character Render Trees
+    // 7. 3D Soccer Ball at Multi-Character Gaze Averaged Center Point
+    this.soccerBallGroup = SoccerBallGenerator.createSoccerBallMesh(
+      initialSettings.soccerBallRadius || 4.8
+    );
+    this.soccerBallGroup.visible = initialSettings.showSoccerBall !== false;
+    this.scene.add(this.soccerBallGroup);
+
+    // 8. Build Character Render Trees
     for (const char of this.characters) {
       this.buildCharacterNode(char);
     }
@@ -361,13 +389,15 @@ export class EyeScene {
     // 1. Build Anatomical Part Meshes
     for (const part of char.bodyData.parts) {
       const geom = ThreeAdapter.createBufferGeometry(part.baseMeshData);
+      const partState = char.getPartDisplayState(part.id);
       const mat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(char.bodyColor),
         roughness: 0.35,
         metalness: 0.08,
-        wireframe: this.currentSettings.wireframe,
+        wireframe: this.currentSettings.wireframe || partState.wireframe,
       });
       const mesh = new THREE.Mesh(geom, mat);
+      mesh.visible = !char.isUnifiedMode && partState.visible;
       partMeshes.set(part.id, mesh);
       charGroup.add(mesh);
     }
@@ -451,16 +481,57 @@ export class EyeScene {
    * and updating skeleton/joint lines and gaze rays.
    */
   public updateAllCharacters(): void {
+    const allGazeHits: THREE.Vector3[] = [];
+    let activeGazeAnalysis: CharacterGazeData | undefined;
+
+    // Common target specs calculation
+    const widthPx = this.currentRefConfig?.widthPx || 1200;
+    const heightPx = this.currentRefConfig?.heightPx || 1500;
+    let worldHeight = this.currentRefConfig?.worldHeight || 180;
+    const aspect = widthPx / (heightPx || 1);
+
+    if (this.currentRefConfig?.targetCouplingMode === 'opposite-scale' && this.currentRefConfig.oppositeScaleFactor && this.currentRefConfig.oppositeScaleFactor > 0) {
+      worldHeight = worldHeight * (1 / this.currentRefConfig.oppositeScaleFactor);
+    }
+    const worldWidth = worldHeight * aspect;
+
+    const posX = this.currentRefConfig?.worldPosition?.x ?? 0;
+    const posY = this.currentRefConfig?.worldPosition?.y ?? (worldHeight / 2);
+    let posZ = this.currentSettings.targetPlaneZ;
+    if (this.currentRefConfig?.targetCouplingMode === 'opposite-depth') {
+      posZ = 240 - this.currentSettings.targetPlaneZ;
+    }
+
+    const targetSpecs: TargetAreaSpecs = {
+      center: new Vec3(posX, posY, posZ),
+      widthWorld: worldWidth,
+      heightWorld: worldHeight,
+      widthPx,
+      heightPx,
+      planeZ: posZ,
+      invertX: this.currentRefConfig?.invertCoordX,
+      invertY: this.currentRefConfig?.invertCoordY,
+      oppositeScaling: this.currentRefConfig?.targetCouplingMode === 'opposite-scale',
+      oppositeScaleFactor: this.currentRefConfig?.oppositeScaleFactor || 1.0,
+    };
+
     for (const char of this.characters) {
       const node = this.characterNodes.get(char.id);
       if (!node) continue;
 
-      // 1. Update visibility of modes
+      // 1. Update visibility & wireframe of modes and individual parts
       if (node.unifiedMesh) {
         node.unifiedMesh.visible = char.isUnifiedMode;
+        (node.unifiedMesh.material as THREE.MeshStandardMaterial).wireframe = this.currentSettings.wireframe;
       }
-      for (const mesh of node.partMeshes.values()) {
-        mesh.visible = !char.isUnifiedMode;
+      for (const part of char.bodyData.parts) {
+        const mesh = node.partMeshes.get(part.id);
+        if (mesh) {
+          const partState = char.getPartDisplayState(part.id);
+          mesh.visible = !char.isUnifiedMode && partState.visible;
+          (mesh.material as THREE.MeshStandardMaterial).wireframe =
+            this.currentSettings.wireframe || partState.wireframe;
+        }
       }
 
       // 2. Deform Vertices using Linear Blend Skinning
@@ -537,7 +608,6 @@ export class EyeScene {
       // 4. Update Procedural Eyes position & rotation
       const leftEyeJoint = char.bodyData.skeleton.getJoint('leftEye');
       const rightEyeJoint = char.bodyData.skeleton.getJoint('rightEye');
-      const headJoint = char.bodyData.skeleton.getJoint('head');
 
       if (leftEyeJoint && node.leftEyeGroup) {
         node.leftEyeGroup.position.set(
@@ -545,7 +615,6 @@ export class EyeScene {
           leftEyeJoint.currentWorldPosition.y,
           leftEyeJoint.currentWorldPosition.z
         );
-        // Combine head rotation with eye yaw/pitch
         const euler = new THREE.Euler(
           (char.leftEyeGaze.pitchDeg * Math.PI) / 180,
           (char.leftEyeGaze.yawDeg * Math.PI) / 180,
@@ -570,38 +639,40 @@ export class EyeScene {
         node.rightEyeGroup.quaternion.setFromEuler(euler);
       }
 
-      // 5. Update Gaze Rays with Target Specs Matched to Reference Picture
-      const widthPx = this.currentRefConfig?.widthPx || 1200;
-      const heightPx = this.currentRefConfig?.heightPx || 1500;
-      let worldHeight = this.currentRefConfig?.worldHeight || 180;
-      const aspect = widthPx / (heightPx || 1);
-
-      if (this.currentRefConfig?.targetCouplingMode === 'opposite-scale' && this.currentRefConfig.oppositeScaleFactor && this.currentRefConfig.oppositeScaleFactor > 0) {
-        worldHeight = worldHeight * (1 / this.currentRefConfig.oppositeScaleFactor);
-      }
-      const worldWidth = worldHeight * aspect;
-
-      const posX = this.currentRefConfig?.worldPosition?.x ?? 0;
-      const posY = this.currentRefConfig?.worldPosition?.y ?? (worldHeight / 2);
-      let posZ = this.currentSettings.targetPlaneZ;
-      if (this.currentRefConfig?.targetCouplingMode === 'opposite-depth') {
-        posZ = 240 - this.currentSettings.targetPlaneZ;
-      }
-
-      const targetSpecs: TargetAreaSpecs = {
-        center: new Vec3(posX, posY, posZ),
-        widthWorld: worldWidth,
-        heightWorld: worldHeight,
-        widthPx,
-        heightPx,
-        planeZ: posZ,
-        invertX: this.currentRefConfig?.invertCoordX,
-        invertY: this.currentRefConfig?.invertCoordY,
-        oppositeScaling: this.currentRefConfig?.targetCouplingMode === 'opposite-scale',
-        oppositeScaleFactor: this.currentRefConfig?.oppositeScaleFactor || 1.0,
-      };
-
+      // 5. Evaluate Gaze for character
       const gazeAnalysis = char.evaluateGaze(targetSpecs);
+
+      if (char.id === this.activeCharacterId) {
+        activeGazeAnalysis = gazeAnalysis;
+      }
+
+      // Collect left eye gaze intersection or projection point
+      if (gazeAnalysis.leftTargetHit.hit && gazeAnalysis.leftTargetHit.point) {
+        allGazeHits.push(new THREE.Vector3(
+          gazeAnalysis.leftTargetHit.point.x,
+          gazeAnalysis.leftTargetHit.point.y,
+          gazeAnalysis.leftTargetHit.point.z
+        ));
+      } else {
+        const lO = gazeAnalysis.leftEyeCenterWorld;
+        const lD = gazeAnalysis.leftGazeDirectionWorld;
+        const tZ = Math.abs(lD.z) > 1e-4 ? (posZ - lO.z) / lD.z : 100;
+        allGazeHits.push(new THREE.Vector3(lO.x + lD.x * tZ, lO.y + lD.y * tZ, posZ));
+      }
+
+      // Collect right eye gaze intersection or projection point
+      if (gazeAnalysis.rightTargetHit.hit && gazeAnalysis.rightTargetHit.point) {
+        allGazeHits.push(new THREE.Vector3(
+          gazeAnalysis.rightTargetHit.point.x,
+          gazeAnalysis.rightTargetHit.point.y,
+          gazeAnalysis.rightTargetHit.point.z
+        ));
+      } else {
+        const rO = gazeAnalysis.rightEyeCenterWorld;
+        const rD = gazeAnalysis.rightGazeDirectionWorld;
+        const tZ = Math.abs(rD.z) > 1e-4 ? (posZ - rO.z) / rD.z : 100;
+        allGazeHits.push(new THREE.Vector3(rO.x + rD.x * tZ, rO.y + rD.y * tZ, posZ));
+      }
 
       // Clear old ray visual elements
       while (node.gazeGroup.children.length > 0) {
@@ -614,7 +685,6 @@ export class EyeScene {
         const rayLen = 50.0;
 
         const addGazeRay = (origin: THREE.Vector3, dir: THREE.Vector3, colorHex: number) => {
-          // Ray line / cylinder
           const rayGeom = new THREE.CylinderGeometry(0.18, 0.18, rayLen, 8);
           rayGeom.translate(0, rayLen / 2, 0);
           rayGeom.rotateX(Math.PI / 2);
@@ -624,7 +694,6 @@ export class EyeScene {
           rayMesh.lookAt(origin.clone().add(dir));
           node.gazeGroup.add(rayMesh);
 
-          // Arrow cone
           const coneGeom = new THREE.ConeGeometry(0.7, 2.2, 12);
           coneGeom.translate(0, 1.1, 0);
           coneGeom.rotateX(Math.PI / 2);
@@ -643,7 +712,7 @@ export class EyeScene {
         const rightD = new THREE.Vector3(gazeAnalysis.rightGazeDirectionWorld.x, gazeAnalysis.rightGazeDirectionWorld.y, gazeAnalysis.rightGazeDirectionWorld.z);
         addGazeRay(rightO, rightD, 0x06b6d4);
 
-        // Update target plane dots for the active character (calibrated to target area)
+        // Update target plane dots for the active character
         if (char.id === this.activeCharacterId) {
           if (gazeAnalysis.leftTargetHit.hit && gazeAnalysis.leftTargetHit.point) {
             const hit = gazeAnalysis.leftTargetHit.point;
@@ -655,11 +724,54 @@ export class EyeScene {
             this.targetPlaneHitDots.right.position.set(hit.x - posX, hit.y - posY, 0.5);
             this.targetPlaneHitDots.right.visible = this.currentSettings.showTargetPlane;
           }
-          if (this.onGazeEvaluated) {
-            this.onGazeEvaluated(gazeAnalysis);
-          }
         }
       }
+    }
+
+    // 6. Compute Multi-Character Averaged Gaze Center Point
+    let avgCenter = new Vec3(posX, posY, posZ);
+    if (allGazeHits.length > 0) {
+      let sumX = 0;
+      let sumY = 0;
+      let sumZ = 0;
+      for (const pt of allGazeHits) {
+        sumX += pt.x;
+        sumY += pt.y;
+        sumZ += pt.z;
+      }
+      avgCenter = new Vec3(
+        sumX / allGazeHits.length,
+        sumY / allGazeHits.length,
+        sumZ / allGazeHits.length
+      );
+    }
+
+    // Target plane hit average in pixel and world space
+    const targetAvgPx = {
+      worldX: avgCenter.x,
+      worldY: avgCenter.y,
+      worldZ: avgCenter.z,
+      pixelX: Math.round(((avgCenter.x - (posX - worldWidth / 2)) / (worldWidth || 1)) * widthPx),
+      pixelY: Math.round(((worldHeight / 2 - (avgCenter.y - posY)) / (worldHeight || 1)) * heightPx),
+    };
+
+    const sceneGazeAvg: SceneGazeAverage = {
+      centerPoint: avgCenter,
+      targetPlaneHitAverage: targetAvgPx,
+      rayCount: allGazeHits.length,
+      characterCount: this.characters.length,
+    };
+    this.latestGazeAverage = sceneGazeAvg;
+
+    // 7. Position 3D Soccer Ball at averaged gaze center point
+    if (this.soccerBallGroup) {
+      this.soccerBallGroup.position.set(avgCenter.x, avgCenter.y, avgCenter.z);
+      this.soccerBallGroup.visible = this.currentSettings.showSoccerBall !== false;
+    }
+
+    // 8. Invoke callback
+    if (activeGazeAnalysis && this.onGazeEvaluated) {
+      this.onGazeEvaluated(activeGazeAnalysis, sceneGazeAvg);
     }
   }
 
@@ -710,15 +822,41 @@ export class EyeScene {
     this.targetPlaneGroup.visible = this.currentSettings.showTargetPlane;
     this.targetPlaneGroup.position.z = this.currentSettings.targetPlaneZ;
 
+    if (this.soccerBallGroup) {
+      this.soccerBallGroup.visible = this.currentSettings.showSoccerBall !== false;
+    }
+
     const wf = this.currentSettings.wireframe;
-    for (const node of this.characterNodes.values()) {
-      for (const m of node.partMeshes.values()) {
-        (m.material as THREE.MeshStandardMaterial).wireframe = wf;
+    for (const [charId, node] of this.characterNodes.entries()) {
+      const char = this.characters.find((c) => c.id === charId);
+      for (const [partId, m] of node.partMeshes.entries()) {
+        const partWireframe = char ? char.getPartDisplayState(partId).wireframe : false;
+        (m.material as THREE.MeshStandardMaterial).wireframe = wf || partWireframe;
       }
       if (node.unifiedMesh) {
         (node.unifiedMesh.material as THREE.MeshStandardMaterial).wireframe = wf;
       }
     }
+  }
+
+  /**
+   * Retrieves the current scene-wide multi-character averaged gaze convergence data.
+   */
+  public getSceneGazeAverage(): SceneGazeAverage | undefined {
+    return this.latestGazeAverage;
+  }
+
+  /**
+   * Automatically articulates all active characters' dual-eye gaze to lock
+   * directly onto the 3D soccer ball / collective gaze average center point.
+   */
+  public focusAllCharactersOnSoccerBall(): void {
+    if (!this.latestGazeAverage) return;
+    const target = this.latestGazeAverage.centerPoint;
+    for (const char of this.characters) {
+      char.setGazeTarget(target);
+    }
+    this.updateAllCharacters();
   }
 
   public setCameraPreset(preset: 'front' | 'top' | 'side' | 'perspective' | 'fullbody'): void {
@@ -805,6 +943,11 @@ export class EyeScene {
     const tick = () => {
       if (this.isDisposed) return;
       this.controls.update();
+      if (this.soccerBallGroup && this.soccerBallGroup.visible) {
+        // Subtle slow spin for 3D realism
+        this.soccerBallGroup.rotation.y += 0.007;
+        this.soccerBallGroup.rotation.x += 0.003;
+      }
       this.renderer.render(this.scene, this.camera);
       this.animFrameId = requestAnimationFrame(tick);
     };

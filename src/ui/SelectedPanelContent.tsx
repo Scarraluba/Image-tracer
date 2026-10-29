@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { Vec3 } from '../math/Vec3';
 import { CharacterModel, CharacterGazeData } from '../body/CharacterModel';
 import { MobileTab } from './MobileBottomNav';
 import { PROPORTION_PRESETS, BodyProportions } from '../body/BodyProportions';
@@ -15,14 +16,20 @@ import {
   RotateCcw,
   Circle,
   Eye,
+  EyeOff,
   Link,
   Unlink,
   Sparkles,
   Move,
+  Grid,
+  Layers,
+  Box,
+  Check,
 } from 'lucide-react';
 
 import { ReferenceImageConfig } from '../reference/ReferenceImageModel';
 import { ReferenceImagePanel } from './ReferenceImagePanel';
+import { SceneGazeAverage } from '../rendering/EyeScene';
 
 interface SelectedPanelContentProps {
   activeTab: MobileTab;
@@ -34,6 +41,12 @@ interface SelectedPanelContentProps {
   onUpdateReferenceConfig: (newConfig: Partial<ReferenceImageConfig>) => void;
   showTargetPlane?: boolean;
   onToggleTargetPlane?: () => void;
+  isWireframe?: boolean;
+  onToggleWireframe?: () => void;
+  sceneGazeAverage?: SceneGazeAverage;
+  showSoccerBall?: boolean;
+  onToggleSoccerBall?: () => void;
+  onFocusAllOnSoccerBall?: () => void;
 }
 
 export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
@@ -46,6 +59,12 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
   onUpdateReferenceConfig,
   showTargetPlane = true,
   onToggleTargetPlane,
+  isWireframe = false,
+  onToggleWireframe,
+  sceneGazeAverage,
+  showSoccerBall = true,
+  onToggleSoccerBall,
+  onFocusAllOnSoccerBall,
 }) => {
   const [syncEyes, setSyncEyes] = useState(true);
   const selectedJoint = character.bodyData.skeleton.getJoint(character.selectedJointId);
@@ -330,11 +349,14 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
           {/* Sliders Grid */}
           <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
             {[
-              { label: 'Head Height', key: 'headHeight', min: 18, max: 28 },
-              { label: 'Head Width', key: 'headWidth', min: 12, max: 20 },
-              { label: 'Shoulder Width', key: 'shoulderWidth', min: 32, max: 56 },
-              { label: 'Chest Width', key: 'chestWidth', min: 24, max: 42 },
-              { label: 'Chest Depth', key: 'chestDepth', min: 14, max: 28 },
+              { label: 'Head Height', key: 'headHeight', min: 14, max: 35 },
+              { label: 'Head Width', key: 'headWidth', min: 10, max: 26 },
+              { label: 'Head Depth', key: 'headDepth', min: 12, max: 30 },
+              { label: 'Neck Length', key: 'neckLength', min: 4, max: 26 },
+              { label: 'Neck Width', key: 'neckWidth', min: 4, max: 16 },
+              { label: 'Shoulder Width', key: 'shoulderWidth', min: 25, max: 65 },
+              { label: 'Chest Width', key: 'chestWidth', min: 20, max: 50 },
+              { label: 'Chest Depth', key: 'chestDepth', min: 12, max: 35 },
               { label: 'Waist Width', key: 'waistWidth', min: 18, max: 36 },
               { label: 'Pelvis Width', key: 'pelvisWidth', min: 22, max: 40 },
               { label: 'Upper Arm Length', key: 'armLength', min: 22, max: 40 },
@@ -368,9 +390,348 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
         </div>
       )}
 
-      {/* --- TAB 3: DUAL-EYE GAZE --- */}
+      {/* --- TAB 3: BODY PARTS MATRIX & PER-PART WIREFRAME/VISIBILITY --- */}
+      {activeTab === 'anatomy' && (
+        <div className="space-y-3.5">
+          {/* Global Mesh Mode & Wireframe Controls */}
+          <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+              Global Display & Mesh Representation
+            </span>
+
+            <div className="grid grid-cols-2 gap-2">
+              {/* Global Wireframe Button */}
+              {onToggleWireframe && (
+                <button
+                  onClick={onToggleWireframe}
+                  className={`p-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border ${
+                    isWireframe
+                      ? 'bg-purple-950 text-purple-300 border-purple-600 shadow-sm'
+                      : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <Grid className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Wireframe {isWireframe ? 'ON' : 'OFF'}</span>
+                </button>
+              )}
+
+              {/* Skeleton Joints */}
+              <button
+                onClick={() => {
+                  character.showSkeleton = !character.showSkeleton;
+                  onUpdateCharacter();
+                }}
+                className={`p-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border ${
+                  character.showSkeleton
+                    ? 'bg-amber-950 text-amber-300 border-amber-700/80 shadow-sm'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <Bone className="w-3.5 h-3.5 text-amber-400" />
+                <span>Skeleton {character.showSkeleton ? 'ON' : 'OFF'}</span>
+              </button>
+            </div>
+
+            {/* Mode Switch: Continuous Unified Mesh vs Anatomical Lofts */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] text-slate-300 font-medium">Body Construction Mode</span>
+                <span
+                  className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    character.isUnifiedMode
+                      ? 'bg-purple-950 text-purple-300 border border-purple-800/60'
+                      : 'bg-sky-950 text-sky-300 border border-sky-800/60'
+                  }`}
+                >
+                  {character.isUnifiedMode ? 'UNIFIED CONTINUOUS' : 'ANATOMICAL LOFTS'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  character.isUnifiedMode = !character.isUnifiedMode;
+                  onUpdateCharacter();
+                }}
+                className="w-full py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-semibold text-slate-200 transition-colors flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>
+                  Switch to {character.isUnifiedMode ? 'Anatomical Part Lofts' : 'Unified Continuous Body'}
+                </span>
+              </button>
+              {character.isUnifiedMode && (
+                <p className="text-[10px] text-slate-400 mt-1 italic">
+                  Note: In Unified Mode, all 15 parts are fused into a single seamless continuous skin. Switch to Anatomical Lofts to isolate, wireframe, or hide individual body segments.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Bulk Matrix Actions */}
+          <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+              Quick Part Actions
+            </span>
+            <div className="grid grid-cols-4 gap-1.5">
+              <button
+                onClick={() => {
+                  character.setAllPartsVisibility(true);
+                  onUpdateCharacter();
+                }}
+                className="py-1 px-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-emerald-300 flex items-center justify-center gap-1"
+                title="Make all body parts visible"
+              >
+                <Eye className="w-3 h-3 text-emerald-400" />
+                <span>Show All</span>
+              </button>
+              <button
+                onClick={() => {
+                  character.setAllPartsVisibility(false);
+                  onUpdateCharacter();
+                }}
+                className="py-1 px-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-slate-400 flex items-center justify-center gap-1"
+                title="Hide all body parts to view skeleton / gaze rays only"
+              >
+                <EyeOff className="w-3 h-3 text-slate-400" />
+                <span>Hide All</span>
+              </button>
+              <button
+                onClick={() => {
+                  character.setAllPartsWireframe(true);
+                  onUpdateCharacter();
+                }}
+                className="py-1 px-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-purple-300 flex items-center justify-center gap-1"
+                title="Wireframe all parts"
+              >
+                <Grid className="w-3 h-3 text-purple-400" />
+                <span>Wire All</span>
+              </button>
+              <button
+                onClick={() => {
+                  character.setAllPartsWireframe(false);
+                  onUpdateCharacter();
+                }}
+                className="py-1 px-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-slate-300 flex items-center justify-center gap-1"
+                title="Set all parts to solid surface"
+              >
+                <Box className="w-3 h-3 text-slate-300" />
+                <span>Solid All</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Body Parts Matrix (Per-Part Wireframe & Visibility List) */}
+          <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                Anatomical Parts Matrix ({character.bodyData.parts.length} Segments)
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                👁️ Vis | 🌐 Wire | 🎯 Solo
+              </span>
+            </div>
+
+            {[
+              {
+                group: 'Head & Neck',
+                items: ['head', 'neck'],
+              },
+              {
+                group: 'Torso & Core',
+                items: ['torso'],
+              },
+              {
+                group: 'Upper Extremities',
+                items: [
+                  'leftUpperArm',
+                  'rightUpperArm',
+                  'leftForearm',
+                  'rightForearm',
+                  'leftHand',
+                  'rightHand',
+                ],
+              },
+              {
+                group: 'Lower Extremities',
+                items: [
+                  'leftThigh',
+                  'rightThigh',
+                  'leftLowerLeg',
+                  'rightLowerLeg',
+                  'leftFoot',
+                  'rightFoot',
+                ],
+              },
+            ].map((section) => (
+              <div key={section.group} className="space-y-1.5">
+                <div className="text-[10px] font-bold text-sky-400 uppercase tracking-wide px-1">
+                  {section.group}
+                </div>
+                <div className="space-y-1">
+                  {section.items.map((pId) => {
+                    const part = character.bodyData.parts.find((p) => p.id === pId);
+                    if (!part) return null;
+                    const displayState = character.getPartDisplayState(pId);
+                    const isPartWireframe = isWireframe || displayState.wireframe;
+
+                    return (
+                      <div
+                        key={pId}
+                        className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                          displayState.visible
+                            ? 'bg-slate-900/90 border-slate-800'
+                            : 'bg-slate-950/50 border-slate-900 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: character.bodyColor }} />
+                          <div>
+                            <div className="text-xs font-semibold text-slate-200">
+                              {part.name}
+                            </div>
+                            <div className="text-[9px] font-mono text-slate-500">
+                              id: {pId}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons for this part */}
+                        <div className="flex items-center gap-1.5">
+                          {/* Visibility Toggle Button */}
+                          <button
+                            onClick={() => {
+                              character.togglePartVisibility(pId);
+                              onUpdateCharacter();
+                            }}
+                            className={`p-1.5 rounded-md border text-xs transition-colors flex items-center justify-center ${
+                              displayState.visible
+                                ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/80 shadow-xs'
+                                : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-300'
+                            }`}
+                            title={displayState.visible ? 'Hide part' : 'Show part'}
+                          >
+                            {displayState.visible ? (
+                              <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                            )}
+                          </button>
+
+                          {/* Wireframe Toggle Button */}
+                          <button
+                            onClick={() => {
+                              character.togglePartWireframe(pId);
+                              onUpdateCharacter();
+                            }}
+                            className={`p-1.5 rounded-md border text-xs transition-colors flex items-center justify-center ${
+                              displayState.wireframe
+                                ? 'bg-purple-950/80 text-purple-300 border-purple-700 shadow-xs'
+                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                            }`}
+                            title={
+                              displayState.wireframe
+                                ? 'Set solid surface'
+                                : 'Set wireframe for this part'
+                            }
+                          >
+                            <Grid className={`w-3.5 h-3.5 ${displayState.wireframe ? 'text-purple-400' : 'text-slate-400'}`} />
+                          </button>
+
+                          {/* Solo Part Button */}
+                          <button
+                            onClick={() => {
+                              character.soloPart(pId);
+                              onUpdateCharacter();
+                            }}
+                            className="px-1.5 py-1 rounded-md bg-slate-800 hover:bg-slate-750 border border-slate-700 text-[10px] font-mono font-semibold text-slate-300 hover:text-white transition-colors"
+                            title="Solo: Isolate this part or restore all"
+                          >
+                            Solo
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB 4: DUAL-EYE GAZE --- */}
       {activeTab === 'gaze' && (
         <div className="space-y-3">
+          {/* Multi-Actor Gaze Averaged Center Point & 3D Soccer Ball Card */}
+          <div className="p-3 bg-slate-950/90 rounded-xl border border-emerald-900/50 space-y-2.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">⚽</span>
+                <div>
+                  <span className="text-[11px] uppercase font-bold tracking-wider text-emerald-400 block">
+                    Scene Gaze Average &amp; 3D Ball
+                  </span>
+                  <span className="text-[9px] text-slate-400">
+                    Calculated collective center across active actors
+                  </span>
+                </div>
+              </div>
+
+              {/* Soccer Ball Visibility Toggle */}
+              {onToggleSoccerBall && (
+                <button
+                  onClick={onToggleSoccerBall}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    showSoccerBall
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/80 shadow-xs'
+                      : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                  }`}
+                  title="Toggle 3D Soccer Ball Visibility"
+                >
+                  <span>⚽</span>
+                  <span>{showSoccerBall ? 'Ball Visible' : 'Ball Hidden'}</span>
+                </button>
+              )}
+            </div>
+
+            {sceneGazeAverage ? (
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                <div className="bg-slate-900/70 p-2 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase font-sans font-semibold">
+                    Averaged Center (3D World)
+                  </span>
+                  <span className="text-emerald-300 font-bold text-xs">
+                    [{sceneGazeAverage.centerPoint.x.toFixed(1)}, {sceneGazeAverage.centerPoint.y.toFixed(1)}, {sceneGazeAverage.centerPoint.z.toFixed(1)}]
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/70 p-2 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase font-sans font-semibold">
+                    Target Board Pixel
+                  </span>
+                  <span className="text-cyan-300 font-bold text-xs">
+                    X: {sceneGazeAverage.targetPlaneHitAverage?.pixelX ?? '-'}px, Y: {sceneGazeAverage.targetPlaneHitAverage?.pixelY ?? '-'}px
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-slate-500 text-[10px] italic">
+                Averaging gaze rays across active scene actors...
+              </div>
+            )}
+
+            {/* Quick Action: Focus All Actors on Soccer Ball */}
+            {onFocusAllOnSoccerBall && (
+              <button
+                onClick={onFocusAllOnSoccerBall}
+                className="w-full py-2 px-3 rounded-lg bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-700/60 text-emerald-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                title="Direct all active characters' dual eyes to lock onto the soccer ball center"
+              >
+                <span>🎯</span>
+                <span>Focus All Scene Actors on Soccer Ball</span>
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center justify-between p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
             <span className="text-[11px] font-bold text-slate-300">Conjugate Gaze Sync</span>
             <button
@@ -563,56 +924,96 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
             </div>
           </div>
 
-          {/* Actor Ground Placement */}
+          {/* Actor Ground Placement & Elevation */}
           <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
-              Placement on Ground Plane
+              Placement & Elevation (Y ≥ 0)
             </span>
+
+            {/* Position X (Lateral) */}
             <div>
               <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
-                <span>Position X</span>
+                <span>Position X (Lateral)</span>
                 <span className="font-mono text-slate-200">{character.position.x.toFixed(0)}</span>
               </div>
               <input
                 type="range"
-                min="-70"
-                max="70"
+                min="-120"
+                max="120"
                 step="2"
                 value={character.position.x}
                 onChange={(e) => {
-                  character.position = character.position.add(
-                    new (character.position.constructor as any)(
-                      parseFloat(e.target.value) - character.position.x,
-                      0,
-                      0
-                    )
-                  );
-                  character.updateKinematics();
+                  character.setPosition(new Vec3(parseFloat(e.target.value), character.position.y, character.position.z));
                   onUpdateCharacter();
                 }}
                 className="w-full accent-sky-500 cursor-pointer"
               />
             </div>
+
+            {/* Position Y (Elevation - Never Negative) */}
+            <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/80">
+              <div className="flex justify-between text-[11px] text-slate-300 mb-0.5">
+                <span className="flex items-center gap-1 font-semibold text-emerald-400">
+                  <span>Position Y (Elevation ≥ 0)</span>
+                </span>
+                <span className="font-mono text-emerald-300 font-bold">
+                  {Math.max(0, character.position.y).toFixed(0)} units
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                step="1"
+                value={Math.max(0, character.position.y)}
+                onChange={(e) => {
+                  const val = Math.max(0, parseFloat(e.target.value) || 0);
+                  character.setPositionY(val);
+                  onUpdateCharacter();
+                }}
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span className="text-[9px] text-slate-500">Quick:</span>
+                {[
+                  { label: 'Ground (0)', y: 0 },
+                  { label: 'Curb (+10)', y: 10 },
+                  { label: 'Step (+25)', y: 25 },
+                  { label: 'Podium (+50)', y: 50 },
+                  { label: 'Stage (+100)', y: 100 },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      character.setPositionY(item.y);
+                      onUpdateCharacter();
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors ${
+                      Math.round(character.position.y) === item.y
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-700 font-bold'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Position Z (Depth) */}
             <div>
               <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
-                <span>Position Z</span>
+                <span>Position Z (Depth)</span>
                 <span className="font-mono text-slate-200">{character.position.z.toFixed(0)}</span>
               </div>
               <input
                 type="range"
-                min="-70"
-                max="70"
+                min="-120"
+                max="120"
                 step="2"
                 value={character.position.z}
                 onChange={(e) => {
-                  character.position = character.position.add(
-                    new (character.position.constructor as any)(
-                      0,
-                      0,
-                      parseFloat(e.target.value) - character.position.z
-                    )
-                  );
-                  character.updateKinematics();
+                  character.setPosition(new Vec3(character.position.x, character.position.y, parseFloat(e.target.value)));
                   onUpdateCharacter();
                 }}
                 className="w-full accent-sky-500 cursor-pointer"

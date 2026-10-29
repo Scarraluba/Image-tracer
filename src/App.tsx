@@ -7,7 +7,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Vec3 } from './math/Vec3';
 import { CharacterModel, CharacterGazeData } from './body/CharacterModel';
 import { DEFAULT_PROPORTIONS, PROPORTION_PRESETS } from './body/BodyProportions';
-import { ViewportSettings, EyeScene } from './rendering/EyeScene';
+import { ViewportSettings, EyeScene, SceneGazeAverage } from './rendering/EyeScene';
 import { Viewport3D } from './workspace/Viewport3D';
 import { TopToolbar, ViewLayoutMode } from './ui/TopToolbar';
 import { MobileBottomNav, MobileTab } from './ui/MobileBottomNav';
@@ -18,6 +18,7 @@ import { DiagnosticsModal } from './ui/DiagnosticsModal';
 import { ReferenceImageConfig, DEFAULT_REFERENCE_IMAGE } from './reference/ReferenceImageModel';
 import { ReferenceImageOverlay } from './ui/ReferenceImageOverlay';
 import { ProjectStorage, ProjectData } from './storage/ProjectStorage';
+import { FirebaseSync } from './storage/FirebaseSync';
 import { ProjectManagerModal } from './ui/ProjectManagerModal';
 import { OfflineIndicator } from './pwa/OfflineIndicator';
 
@@ -58,6 +59,8 @@ export default function App() {
     showTargetPlane: true,
     wireframe: false,
     targetPlaneZ: 120.0,
+    showSoccerBall: true,
+    soccerBallRadius: 4.8,
   });
 
   const [referenceConfig, setReferenceConfig] = useState<ReferenceImageConfig>(DEFAULT_REFERENCE_IMAGE);
@@ -73,6 +76,7 @@ export default function App() {
   }, []);
 
   const [gazeData, setGazeData] = useState<CharacterGazeData | undefined>(undefined);
+  const [sceneGazeAverage, setSceneGazeAverage] = useState<SceneGazeAverage | undefined>(undefined);
   const [cameraInfo, setCameraInfo] = useState<{ distance: number; azimuthDeg: number; elevationDeg: number }>({
     distance: 240.0,
     azimuthDeg: 15.0,
@@ -147,6 +151,25 @@ export default function App() {
     });
   }, []);
 
+  // 1-Click Toggle for 3D Soccer Ball at Gaze Center Point
+  const handleToggleSoccerBall = useCallback(() => {
+    setSettings((prev) => {
+      const updated = { ...prev, showSoccerBall: prev.showSoccerBall === false ? true : false };
+      if (sceneRef.current) {
+        sceneRef.current.updateSettings(updated);
+      }
+      return updated;
+    });
+  }, []);
+
+  // Direct all active characters' gaze to lock onto the soccer ball center
+  const handleFocusAllOnSoccerBall = useCallback(() => {
+    if (sceneRef.current) {
+      sceneRef.current.focusAllCharactersOnSoccerBall();
+      forceSceneUpdate();
+    }
+  }, [forceSceneUpdate]);
+
   const handleResetPose = useCallback(() => {
     if (activeChar) {
       activeChar.applyPose('Relaxed / A-Pose');
@@ -177,8 +200,11 @@ export default function App() {
     setGeometryStats(scene.getGeometryStats());
   }, []);
 
-  const handleGazeEvaluated = useCallback((data: CharacterGazeData) => {
+  const handleGazeEvaluated = useCallback((data: CharacterGazeData, avg?: SceneGazeAverage) => {
     setGazeData(data);
+    if (avg) {
+      setSceneGazeAverage(avg);
+    }
   }, []);
 
   const handleCameraChange = useCallback((camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => {
@@ -211,6 +237,7 @@ export default function App() {
           leftEyeGaze: { pitchDeg: c.leftEyeGaze.pitchDeg, yawDeg: c.leftEyeGaze.yawDeg },
           rightEyeGaze: { pitchDeg: c.rightEyeGaze.pitchDeg, yawDeg: c.rightEyeGaze.yawDeg },
           jointRotations,
+          partDisplayStates: { ...c.partDisplayStates },
         };
       }),
       referenceConfig: { ...referenceConfig },
@@ -220,7 +247,7 @@ export default function App() {
 
   const handleSaveCurrentProject = useCallback((name: string) => {
     const proj = getCurrentProjectData(name);
-    ProjectStorage.saveProject(proj);
+    FirebaseSync.saveProject(proj);
   }, [getCurrentProjectData]);
 
   const handleLoadProject = useCallback((project: ProjectData) => {
@@ -241,6 +268,10 @@ export default function App() {
       char.leftEyeGaze.yawDeg = sc.leftEyeGaze.yawDeg;
       char.rightEyeGaze.pitchDeg = sc.rightEyeGaze.pitchDeg;
       char.rightEyeGaze.yawDeg = sc.rightEyeGaze.yawDeg;
+
+      if (sc.partDisplayStates) {
+        char.partDisplayStates = { ...sc.partDisplayStates };
+      }
 
       if (sc.jointRotations) {
         for (const [jId, rot] of Object.entries(sc.jointRotations)) {
@@ -355,10 +386,12 @@ export default function App() {
         onOpenProjects={() => setIsProjectModalOpen(true)}
         onToggleTargetPlane={handleToggleTargetPlane}
         targetPlaneVisible={settings.showTargetPlane}
+        onToggleSoccerBall={handleToggleSoccerBall}
+        soccerBallVisible={settings.showSoccerBall !== false}
       />
 
       {/* Main Workspace with Dynamic Responsive Layout */}
-      <div className="flex-1 flex overflow-hidden relative pb-16">
+      <div className="flex-1 flex flex-col overflow-hidden relative pb-16">
         {/* LAYOUT 1: SPLIT VIEW (Left 3D Preview | Right Selected Panel) */}
         {layoutMode === 'split' && (
           <div className="flex-1 flex flex-col md:flex-row h-full w-full overflow-hidden">
@@ -420,6 +453,12 @@ export default function App() {
                   onUpdateReferenceConfig={handleUpdateReferenceConfig}
                   showTargetPlane={settings.showTargetPlane}
                   onToggleTargetPlane={handleToggleTargetPlane}
+                  isWireframe={settings.wireframe}
+                  onToggleWireframe={() => handleUpdateSettings({ wireframe: !settings.wireframe })}
+                  sceneGazeAverage={sceneGazeAverage}
+                  showSoccerBall={settings.showSoccerBall !== false}
+                  onToggleSoccerBall={handleToggleSoccerBall}
+                  onFocusAllOnSoccerBall={handleFocusAllOnSoccerBall}
                 />
               </div>
             </div>
@@ -462,6 +501,12 @@ export default function App() {
                 onUpdateReferenceConfig={handleUpdateReferenceConfig}
                 showTargetPlane={settings.showTargetPlane}
                 onToggleTargetPlane={handleToggleTargetPlane}
+                isWireframe={settings.wireframe}
+                onToggleWireframe={() => handleUpdateSettings({ wireframe: !settings.wireframe })}
+                sceneGazeAverage={sceneGazeAverage}
+                showSoccerBall={settings.showSoccerBall !== false}
+                onToggleSoccerBall={handleToggleSoccerBall}
+                onFocusAllOnSoccerBall={handleFocusAllOnSoccerBall}
               />
             </MobileDrawer>
           </div>
@@ -505,6 +550,12 @@ export default function App() {
                 onUpdateReferenceConfig={handleUpdateReferenceConfig}
                 showTargetPlane={settings.showTargetPlane}
                 onToggleTargetPlane={handleToggleTargetPlane}
+                isWireframe={settings.wireframe}
+                onToggleWireframe={() => handleUpdateSettings({ wireframe: !settings.wireframe })}
+                sceneGazeAverage={sceneGazeAverage}
+                showSoccerBall={settings.showSoccerBall !== false}
+                onToggleSoccerBall={handleToggleSoccerBall}
+                onFocusAllOnSoccerBall={handleFocusAllOnSoccerBall}
               />
             </div>
           </div>
@@ -517,6 +568,11 @@ export default function App() {
           cameraInfo={cameraInfo}
           geometryStats={geometryStats}
           gazeData={gazeData}
+          isWireframe={settings.wireframe}
+          onToggleWireframe={() => handleUpdateSettings({ wireframe: !settings.wireframe })}
+          sceneGazeAverage={sceneGazeAverage}
+          showSoccerBall={settings.showSoccerBall !== false}
+          onToggleSoccerBall={handleToggleSoccerBall}
         />
       </div>
 

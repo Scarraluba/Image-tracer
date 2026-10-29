@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ProjectStorage, ProjectData } from '../storage/ProjectStorage';
+import { FirebaseSync } from '../storage/FirebaseSync';
 import {
   FolderOpen,
   Save,
@@ -76,11 +77,29 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
     }
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (window.confirm(`Delete project "${name}"?`)) {
-      ProjectStorage.deleteProject(id);
+      await FirebaseSync.deleteProject(id);
       refreshList();
       setNotification({ type: 'success', text: `Project "${name}" deleted.` });
+    }
+  };
+
+  const handleCloudSync = async () => {
+    try {
+      setNotification({ type: 'success', text: 'Syncing with Firebase Firestore...' });
+      const cloudProjs = await FirebaseSync.fetchCloudProjects();
+      for (const cp of cloudProjs) {
+        ProjectStorage.saveProject(cp);
+      }
+      refreshList();
+      setNotification({
+        type: 'success',
+        text: `Synced ${cloudProjs.length} project(s) from Firebase cloud!`,
+      });
+      setTimeout(() => setNotification(null), 3000);
+    } catch {
+      setNotification({ type: 'error', text: 'Cloud sync failed. Local storage preserved.' });
     }
   };
 
@@ -164,11 +183,21 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {isOnline ? (
-              <span className="text-emerald-400 font-medium flex items-center gap-1">
-                <Wifi className="w-3 h-3" /> Online
-              </span>
+              <>
+                <button
+                  onClick={handleCloudSync}
+                  className="px-2 py-0.5 rounded bg-sky-950 hover:bg-sky-900 border border-sky-800 text-sky-300 font-mono text-[10px] flex items-center gap-1 transition-colors"
+                  title="Fetch and merge latest projects from Firebase Firestore"
+                >
+                  <Cloud className="w-3 h-3 text-sky-400" />
+                  <span>Sync Firebase</span>
+                </button>
+                <span className="text-emerald-400 font-medium flex items-center gap-1">
+                  <Wifi className="w-3 h-3" /> Online
+                </span>
+              </>
             ) : (
               <span className="text-amber-400 font-medium flex items-center gap-1">
                 <WifiOff className="w-3 h-3" /> Offline (Local Storage Mode)

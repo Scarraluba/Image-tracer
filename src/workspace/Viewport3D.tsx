@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { EyeScene, ViewportSettings } from '../rendering/EyeScene';
+import { EyeScene, ViewportSettings, SceneGazeAverage } from '../rendering/EyeScene';
 import { CharacterModel, CharacterGazeData } from '../body/CharacterModel';
 import { ReferenceImageConfig } from '../reference/ReferenceImageModel';
 import { Camera, User, Crosshair } from 'lucide-react';
@@ -16,7 +16,7 @@ interface Viewport3DProps {
   settings: ViewportSettings;
   referenceConfig?: ReferenceImageConfig;
   onCameraChange: (camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => void;
-  onGazeEvaluated?: (data: CharacterGazeData) => void;
+  onGazeEvaluated?: (data: CharacterGazeData, averageGaze?: SceneGazeAverage) => void;
   onSceneReady?: (scene: EyeScene) => void;
 }
 

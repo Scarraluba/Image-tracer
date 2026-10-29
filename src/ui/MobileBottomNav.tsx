@@ -16,7 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-export type MobileTab = 'joints' | 'proportions' | 'reference' | 'gaze' | 'poses' | 'preview';
+export type MobileTab = 'joints' | 'proportions' | 'anatomy' | 'reference' | 'gaze' | 'poses' | 'preview';
 
 interface MobileBottomNavProps {
   activeTab: MobileTab;
@@ -105,7 +105,29 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             <span className="text-[10px] uppercase font-medium tracking-tight">Body</span>
           </button>
 
-          {/* 3. REFERENCE IMAGE */}
+          {/* 3. ANATOMY & WIREFRAME MATRIX */}
+          <button
+            onClick={() => {
+              onSelectTab('anatomy');
+              onToggleDrawer(true);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 py-1 px-2.5 shrink-0 min-w-[62px] rounded-xl transition-all ${
+              activeTab === 'anatomy' && isDrawerOpen
+                ? 'text-purple-400 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'anatomy' && isDrawerOpen ? 'bg-purple-500/20 shadow-sm' : ''
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] uppercase font-medium tracking-tight">Parts</span>
+          </button>
+
+          {/* 4. REFERENCE IMAGE */}
           <button
             onClick={() => {
               onSelectTab('reference');

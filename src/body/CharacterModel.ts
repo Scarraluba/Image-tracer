@@ -55,6 +55,11 @@ export interface CharacterGazeData {
   targetSpecs?: TargetAreaSpecs;
 }
 
+export interface BodyPartDisplayState {
+  visible: boolean;
+  wireframe: boolean;
+}
+
 export class CharacterModel {
   readonly id: string;
   name: string;
@@ -79,6 +84,9 @@ export class CharacterModel {
   showGazeRays: boolean = true;
   bodyColor: string = '#38bdf8';
 
+  // Per-body-part visibility & wireframe map
+  partDisplayStates: Record<string, BodyPartDisplayState> = {};
+
   constructor(
     id: string,
     name: string,
@@ -89,27 +97,130 @@ export class CharacterModel {
   ) {
     this.id = id;
     this.name = name;
-    this.position = position;
+    // Y position must never be negative (cannot sink below ground plane)
+    this.position = new Vec3(position.x, Math.max(0, position.y), position.z);
     this.rotationDeg = rotationDeg;
     this.proportions = { ...proportions };
     this.bodyColor = bodyColor;
     this.bodyData = ProceduralBodyGenerator.generateBody(this.proportions, Vec3.ZERO);
+    this.initPartDisplayStates();
+    this.updateKinematics();
+  }
+
+  private initPartDisplayStates(): void {
+    for (const part of this.bodyData.parts) {
+      if (!this.partDisplayStates[part.id]) {
+        this.partDisplayStates[part.id] = { visible: true, wireframe: false };
+      }
+    }
+  }
+
+  /**
+   * Sets character position with strict non-negative Y enforcement (Y >= 0).
+   */
+  setPosition(pos: Vec3): void {
+    this.position = new Vec3(pos.x, Math.max(0, pos.y), pos.z);
     this.updateKinematics();
   }
 
   /**
-   * Rebuilds procedural geometry when proportions change
+   * Sets character elevation above ground (Y >= 0).
+   */
+  setPositionY(y: number): void {
+    this.position = new Vec3(this.position.x, Math.max(0, y), this.position.z);
+    this.updateKinematics();
+  }
+
+  /**
+   * Rebuilds procedural geometry when proportions change while PRESERVING
+   * all current joint rotations and poses rather than resetting them to zero.
    */
   updateProportions(newProps: Partial<BodyProportionsConfig>): void {
+    // 1. Capture current joint rotations across the entire skeleton
+    const savedRotations = new Map<string, { pitchDeg: number; yawDeg: number; rollDeg: number }>();
+    if (this.bodyData?.skeleton?.joints) {
+      for (const [jId, joint] of this.bodyData.skeleton.joints.entries()) {
+        savedRotations.set(jId, { ...joint.rotationAngles });
+      }
+    }
+
     this.proportions = { ...this.proportions, ...newProps };
     this.bodyData = ProceduralBodyGenerator.generateBody(this.proportions, Vec3.ZERO);
+
+    // 2. Restore all saved joint rotations into the newly generated skeleton
+    for (const [jId, rot] of savedRotations.entries()) {
+      const joint = this.bodyData.skeleton.getJoint(jId);
+      if (joint) {
+        joint.setRotation(rot.pitchDeg, rot.yawDeg, rot.rollDeg);
+      }
+    }
+
+    this.initPartDisplayStates();
     this.updateKinematics();
+  }
+
+  getPartDisplayState(partId: string): BodyPartDisplayState {
+    if (!this.partDisplayStates[partId]) {
+      this.partDisplayStates[partId] = { visible: true, wireframe: false };
+    }
+    return this.partDisplayStates[partId];
+  }
+
+  setPartVisibility(partId: string, visible: boolean): void {
+    const s = this.getPartDisplayState(partId);
+    s.visible = visible;
+  }
+
+  setPartWireframe(partId: string, wireframe: boolean): void {
+    const s = this.getPartDisplayState(partId);
+    s.wireframe = wireframe;
+  }
+
+  togglePartVisibility(partId: string): void {
+    const s = this.getPartDisplayState(partId);
+    s.visible = !s.visible;
+  }
+
+  togglePartWireframe(partId: string): void {
+    const s = this.getPartDisplayState(partId);
+    s.wireframe = !s.wireframe;
+  }
+
+  setAllPartsVisibility(visible: boolean): void {
+    for (const part of this.bodyData.parts) {
+      const s = this.getPartDisplayState(part.id);
+      s.visible = visible;
+    }
+  }
+
+  setAllPartsWireframe(wireframe: boolean): void {
+    for (const part of this.bodyData.parts) {
+      const s = this.getPartDisplayState(part.id);
+      s.wireframe = wireframe;
+    }
+  }
+
+  soloPart(partId: string): void {
+    const otherVisible = this.bodyData.parts.some(
+      (p) => p.id !== partId && this.getPartDisplayState(p.id).visible
+    );
+    if (!otherVisible && this.getPartDisplayState(partId).visible) {
+      this.setAllPartsVisibility(true);
+    } else {
+      for (const part of this.bodyData.parts) {
+        this.getPartDisplayState(part.id).visible = (part.id === partId);
+      }
+    }
   }
 
   /**
    * Updates character root transform and all skeletal forward kinematics
    */
   updateKinematics(): void {
+    // Non-negative Y invariant: characters stand on ground (Y=0) or elevate above it, never subterranean
+    if (this.position.y < 0) {
+      this.position = new Vec3(this.position.x, 0, this.position.z);
+    }
     // Character root transform from position and global yaw rotation
     const rotQuat = Quaternion.fromAxisAngle(Vec3.UNIT_Y, (this.rotationDeg * Math.PI) / 180);
     const rootMat = Mat4.fromRotationTranslationScale(rotQuat, this.position);
@@ -279,5 +390,38 @@ export class CharacterModel {
       rightPixelHit,
       targetSpecs,
     };
+  }
+
+  /**
+   * Automatically sets eye gaze angles (pitch/yaw) to look directly at a world-space target point.
+   */
+  setGazeTarget(worldTarget: Vec3): void {
+    const leftEyeJoint = this.bodyData.skeleton.getJoint('leftEye');
+    const rightEyeJoint = this.bodyData.skeleton.getJoint('rightEye');
+    const headJoint = this.bodyData.skeleton.getJoint('head');
+
+    const headMat = headJoint ? headJoint.currentGlobalTransform : Mat4.identity();
+    const headMatInv = headMat.invert();
+
+    const orientEye = (eyePos: Vec3): { pitchDeg: number; yawDeg: number } => {
+      const worldDir = worldTarget.sub(eyePos).normalize();
+      const localDir = headMatInv.transformDirection(worldDir).normalize();
+      // localDir: +Z is forward, +Y is up, +X is right
+      const yawRad = Math.atan2(localDir.x, localDir.z);
+      const pitchRad = -Math.asin(Math.max(-1, Math.min(1, localDir.y)));
+      return {
+        yawDeg: Math.max(-45, Math.min(45, Math.round(((yawRad * 180) / Math.PI) * 10) / 10)),
+        pitchDeg: Math.max(-35, Math.min(35, Math.round(((pitchRad * 180) / Math.PI) * 10) / 10)),
+      };
+    };
+
+    if (leftEyeJoint) {
+      const leftAngles = orientEye(leftEyeJoint.currentWorldPosition);
+      this.leftEyeGaze = { yawDeg: leftAngles.yawDeg, pitchDeg: leftAngles.pitchDeg, color: this.leftEyeGaze.color };
+    }
+    if (rightEyeJoint) {
+      const rightAngles = orientEye(rightEyeJoint.currentWorldPosition);
+      this.rightEyeGaze = { yawDeg: rightAngles.yawDeg, pitchDeg: rightAngles.pitchDeg, color: this.rightEyeGaze.color };
+    }
   }
 }

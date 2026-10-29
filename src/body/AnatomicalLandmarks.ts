@@ -67,15 +67,18 @@ export class AnatomicalLandmarks {
 
     // Torso heights
     const yPelvis = yHip + 2.0;
-    const torsoHeight = H - props.headHeight - props.neckLength - yPelvis;
+    let torsoHeight = H - props.headHeight - props.neckLength - yPelvis;
+    if (torsoHeight < 15) {
+      torsoHeight = 15;
+    }
     const yWaist = yPelvis + torsoHeight * 0.45;
     const yChest = yPelvis + torsoHeight * 0.85;
     const yNeckBase = yPelvis + torsoHeight;
 
-    // Head heights
-    const yChin = yNeckBase + props.neckLength * 0.7;
+    // Head heights driven by neckLength
+    const yChin = yNeckBase + props.neckLength * 0.65;
     const yHeadCenter = yNeckBase + props.neckLength + (props.headHeight * 0.45);
-    const yCrown = yGround + H;
+    const yCrown = yNeckBase + props.neckLength + props.headHeight;
 
     // Lateral offsets (+X = Character Left, -X = Character Right)
     const hipX = props.pelvisWidth * 0.35;

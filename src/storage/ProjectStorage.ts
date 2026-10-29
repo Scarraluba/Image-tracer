@@ -19,6 +19,7 @@ export interface SerializedCharacter {
   leftEyeGaze: { pitchDeg: number; yawDeg: number };
   rightEyeGaze: { pitchDeg: number; yawDeg: number };
   jointRotations: Record<string, { pitchDeg: number; yawDeg: number; rollDeg: number }>;
+  partDisplayStates?: Record<string, { visible: boolean; wireframe: boolean }>;
 }
 
 export interface ProjectData {

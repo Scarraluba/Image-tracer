@@ -51,6 +51,8 @@ interface TopToolbarProps {
   onOpenProjects?: () => void;
   onToggleTargetPlane?: () => void;
   targetPlaneVisible?: boolean;
+  onToggleSoccerBall?: () => void;
+  soccerBallVisible?: boolean;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -73,6 +75,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   onOpenProjects,
   onToggleTargetPlane,
   targetPlaneVisible = true,
+  onToggleSoccerBall,
+  soccerBallVisible = true,
 }) => {
   const activeChar = characters.find((c) => c.id === activeCharacterId);
 
@@ -172,8 +176,37 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
         </button>
       </div>
 
-      {/* Right Actions: Target Board Toggle, Ref Image, PWA Install, Diagnostics & Export */}
+      {/* Right Actions: Wireframe Toggle, Target Board Toggle, Ref Image, PWA Install, Diagnostics & Export */}
       <div className="flex items-center gap-1.5">
+        {/* Toggle Global Wireframe */}
+        <button
+          onClick={() => onUpdateSettings({ wireframe: !settings.wireframe })}
+          className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-medium transition-colors flex items-center gap-1 ${
+            settings.wireframe
+              ? 'bg-purple-950/80 text-purple-300 border-purple-600 shadow-xs'
+              : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+          title="Toggle Global Wireframe Mode"
+        >
+          <Grid className="w-3.5 h-3.5 text-purple-400" />
+          <span className="hidden md:inline">Wireframe</span>
+        </button>
+        {/* Toggle 3D Soccer Ball at Gaze Center Point */}
+        {onToggleSoccerBall && (
+          <button
+            onClick={onToggleSoccerBall}
+            className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-medium transition-colors flex items-center gap-1 ${
+              soccerBallVisible
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/80 shadow-xs'
+                : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+            }`}
+            title="Toggle 3D Soccer Ball at Multi-Character Gaze Center Point"
+          >
+            <span className="text-xs">⚽</span>
+            <span className="hidden lg:inline">Ball</span>
+          </button>
+        )}
+
         {/* Toggle Target Board Visibility */}
         {onToggleTargetPlane && (
           <button
