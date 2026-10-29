@@ -84,19 +84,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
     <header className="h-14 bg-slate-900 border-b border-slate-800 px-3 md:px-4 flex items-center justify-between text-slate-200 select-none z-30 shrink-0">
       {/* Brand, Projects & Actor Dropdown */}
       <div className="flex items-center gap-2 md:gap-3">
-        <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-bold tracking-tight shrink-0">
-          <Eye className="w-4 h-4 text-sky-400" />
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5 md:gap-2">
-            <h1 className="font-bold text-xs md:text-sm tracking-wide text-slate-100 uppercase">
-              EYEW
-            </h1>
-            <span className="hidden sm:inline-block text-[9px] uppercase font-mono px-1 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60">
-              3D Engine
-            </span>
-          </div>
-        </div>
+ 
 
         {/* Projects Save/Load Button */}
         {onOpenProjects && (
@@ -162,18 +150,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           <span className="hidden sm:inline">Split</span>
         </button>
 
-        <button
-          onClick={() => onSetLayoutMode('panel')}
-          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-            layoutMode === 'panel'
-              ? 'bg-sky-500 text-slate-950 font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-          title="Panel Only Focus Mode"
-        >
-          <LayoutTemplate className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Panel</span>
-        </button>
+ 
       </div>
 
       {/* Right Actions: Wireframe Toggle, Target Board Toggle, Ref Image, PWA Install, Diagnostics & Export */}
@@ -239,28 +216,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           </button>
         )}
 
-        {/* PWA Install Button */}
-        <PWAInstallButton />
-
-        {/* Diagnostics Modal Button */}
-        <button
-          onClick={onOpenDiagnostics}
-          className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60 text-xs font-medium transition-colors flex items-center gap-1"
-          title="Run Geometry & Mathematical Invariant Tests"
-        >
-          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="hidden md:inline">Tests</span>
-        </button>
-
-        {/* Export OBJ */}
-        <button
-          onClick={onExportOBJ}
-          className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center gap-1"
-          title="Export 3D Model to Wavefront .OBJ"
-        >
-          <Download className="w-3.5 h-3.5 text-sky-400" />
-          <span className="hidden md:inline">OBJ</span>
-        </button>
+   
       </div>
     </header>
   );

@@ -1,12 +1,12 @@
 {
-  "projectId": "scarra-dev",
-  "appId": "1:992784292767:web:cae19cb80ef482a648fbaa",
-  "apiKey": "AIzaSyBs02jHiMkytyLEAS2d4wnbhZXvRod9QLo",
-  "authDomain": "scarra-dev.firebaseapp.com",
+  "projectId": "imgtracer3d",
+  "appId": "1:525049626645:web:30c706e6e2d1fc4f718e1c",
+  "apiKey": "AIzaSyBfwV9Gsln0L5emXGWViFSaMeljg_0lMnc",
+  "authDomain": "imgtracer3d.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-eyew3danatomical-0ce25a25-d726-4a15-8895-10531b8b9072",
-  "storageBucket": "scarra-dev.firebasestorage.app",
-  "messagingSenderId": "992784292767",
-  "measurementId": "",
+  "storageBucket": "imgtracer3d.firebasestorage.app",
+  "messagingSenderId": "525049626645",
+  "measurementId": "G-2JEVVC9JY0",
   "oAuthClientId": "992784292767-thg5ftcncmp5ehm7ploegbhfi02u0uks.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }
