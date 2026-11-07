@@ -23,6 +23,20 @@ export interface ViewportSettings {
   targetPlaneZ: number;
   showSoccerBall: boolean;
   soccerBallRadius?: number;
+  showEyeWireframe?: boolean;
+  showEyeOutlines?: boolean;
+  showEyeOutlineOnly?: boolean; // When true, eyes are rendered as outlines only (solid is hidden / see-through)
+  eyeSolidOpacity?: number; // 0.0 (fully transparent/hollow) to 1.0 (fully solid)
+}
+
+export interface EyeRenderNodes {
+  group: THREE.Group;
+  scleraMesh: THREE.Mesh;
+  irisMesh: THREE.Mesh;
+  pupilMesh: THREE.Mesh;
+  pupilGroup: THREE.Group;
+  wireframeLines: (THREE.LineSegments | THREE.LineLoop | THREE.Line)[];
+  outlineLines: (THREE.LineSegments | THREE.LineLoop | THREE.Line)[];
 }
 
 export interface SceneGazeAverage {
@@ -77,6 +91,8 @@ export class EyeScene {
       boneLines?: THREE.LineSegments;
       leftEyeGroup: THREE.Group;
       rightEyeGroup: THREE.Group;
+      leftEye: EyeRenderNodes;
+      rightEye: EyeRenderNodes;
     }
   > = new Map();
 
@@ -429,40 +445,175 @@ export class EyeScene {
       skeletonGroup.add(sphereMesh);
     }
 
-    // 4. Build Procedural Eyes attached to head
-    const createEyeSubGroup = (eyeRadius: number = 2.2): THREE.Group => {
-      const g = new THREE.Group();
-      // Sclera
-      const sData = SphereGenerator.generateSphere(eyeRadius, 14, 20);
-      const sMesh = new THREE.Mesh(
-        ThreeAdapter.createBufferGeometry(sData),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 })
-      );
-      g.add(sMesh);
+    // Helper to generate clean circular 3D line loops without dense triangular clutter
+    const createCircleLoop = (
+      radius: number,
+      color: number,
+      plane: 'xy' | 'yz' | 'xz' = 'xy',
+      zOffset: number = 0,
+      sphereCurvatureRadius: number = 0,
+      opacity: number = 0.95
+    ): THREE.LineLoop => {
+      const segments = 64;
+      const points: THREE.Vector3[] = [];
+      for (let i = 0; i < segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        const c = radius * Math.cos(theta);
+        const s = radius * Math.sin(theta);
+        let z = zOffset;
+        if (sphereCurvatureRadius > 0) {
+          const distSq = c * c + s * s;
+          z = (distSq < sphereCurvatureRadius * sphereCurvatureRadius
+            ? Math.sqrt(sphereCurvatureRadius * sphereCurvatureRadius - distSq)
+            : 0) + zOffset;
+        }
 
-      // Iris
-      const iData = DiscGenerator.generateIris(eyeRadius * 0.55, eyeRadius, 0.03);
-      const iMesh = new THREE.Mesh(
-        ThreeAdapter.createBufferGeometry(iData),
-        new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.4 })
-      );
-      g.add(iMesh);
-
-      // Pupil
-      const pData = DiscGenerator.generatePupil(eyeRadius * 0.25, eyeRadius, 0.05);
-      const pMesh = new THREE.Mesh(
-        ThreeAdapter.createBufferGeometry(pData),
-        new THREE.MeshBasicMaterial({ color: 0x050505 })
-      );
-      g.add(pMesh);
-
-      return g;
+        if (plane === 'xy') {
+          points.push(new THREE.Vector3(c, s, z));
+        } else if (plane === 'yz') {
+          points.push(new THREE.Vector3(z, c, s));
+        } else {
+          points.push(new THREE.Vector3(c, z, s));
+        }
+      }
+      const geom = new THREE.BufferGeometry().setFromPoints(points);
+      const mat = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        linewidth: 2,
+      });
+      return new THREE.LineLoop(geom, mat);
     };
 
-    const leftEyeGroup = createEyeSubGroup();
-    const rightEyeGroup = createEyeSubGroup();
-    charGroup.add(leftEyeGroup);
-    charGroup.add(rightEyeGroup);
+    // 4. Build Procedural Eyes attached to head (with wireframe and clean outlines support)
+    const createEyeSubGroup = (eyeRadius: number = 2.2): EyeRenderNodes => {
+      const g = new THREE.Group();
+      const wireframeLines: (THREE.LineSegments | THREE.LineLoop | THREE.Line)[] = [];
+      const outlineLines: (THREE.LineSegments | THREE.LineLoop | THREE.Line)[] = [];
+
+      // Sclera Mesh
+      const sData = SphereGenerator.generateSphere(eyeRadius, 14, 20);
+      const sGeom = ThreeAdapter.createBufferGeometry(sData);
+      const sMat = new THREE.MeshStandardMaterial({
+        color: 0xf8fafc,
+        roughness: 0.25,
+        transparent: true,
+        opacity: 1.0,
+      });
+      const sMesh = new THREE.Mesh(sGeom, sMat);
+      g.add(sMesh);
+
+      // Sclera Dense Wireframe (Triangles)
+      const sWireGeom = new THREE.WireframeGeometry(sGeom);
+      const sWireMat = new THREE.LineBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const sWire = new THREE.LineSegments(sWireGeom, sWireMat);
+      sWire.visible = false;
+      g.add(sWire);
+      wireframeLines.push(sWire);
+
+      // Sclera Clean Anatomical Outlines (Silhouette & Major Orthogonal Circles)
+      // Coronal silhouette ring (facing gaze axis)
+      const sSilhouette = createCircleLoop(eyeRadius, 0x38bdf8, 'xy', 0, 0, 0.95);
+      sSilhouette.visible = false;
+      g.add(sSilhouette);
+      outlineLines.push(sSilhouette);
+
+      // Transverse & Sagittal meridian rings for depth without dense triangular spiderwebs
+      const sMeridianY = createCircleLoop(eyeRadius, 0x0284c7, 'xz', 0, 0, 0.45);
+      sMeridianY.visible = false;
+      g.add(sMeridianY);
+      outlineLines.push(sMeridianY);
+
+      const sMeridianX = createCircleLoop(eyeRadius, 0x0284c7, 'yz', 0, 0, 0.45);
+      sMeridianX.visible = false;
+      g.add(sMeridianX);
+      outlineLines.push(sMeridianX);
+
+      // Iris Mesh
+      const irisRadius = eyeRadius * 0.55;
+      const iData = DiscGenerator.generateIris(irisRadius, eyeRadius, 0.03);
+      const iGeom = ThreeAdapter.createBufferGeometry(iData);
+      const iMat = new THREE.MeshStandardMaterial({
+        color: 0x1d4ed8,
+        roughness: 0.4,
+        transparent: true,
+        opacity: 1.0,
+      });
+      const iMesh = new THREE.Mesh(iGeom, iMat);
+      g.add(iMesh);
+
+      // Iris Dense Wireframe (Triangles)
+      const iWireGeom = new THREE.WireframeGeometry(iGeom);
+      const iWireMat = new THREE.LineBasicMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.75,
+      });
+      const iWire = new THREE.LineSegments(iWireGeom, iWireMat);
+      iWire.visible = false;
+      g.add(iWire);
+      wireframeLines.push(iWire);
+
+      // Iris Limbal Outline Ring (Clean circle bounding the iris)
+      const iLimbalRing = createCircleLoop(irisRadius, 0x22d3ee, 'xy', 0.03, eyeRadius, 0.95);
+      iLimbalRing.visible = false;
+      g.add(iLimbalRing);
+      outlineLines.push(iLimbalRing);
+
+      // Pupil Group (Transforms together for independent micro-offset & aperture scaling)
+      const pupilGroup = new THREE.Group();
+      g.add(pupilGroup);
+
+      // Pupil Mesh
+      const pupilRadius = eyeRadius * 0.25;
+      const pData = DiscGenerator.generatePupil(pupilRadius, eyeRadius, 0.05);
+      const pGeom = ThreeAdapter.createBufferGeometry(pData);
+      const pMat = new THREE.MeshBasicMaterial({
+        color: 0x050505,
+        transparent: true,
+        opacity: 1.0,
+      });
+      const pMesh = new THREE.Mesh(pGeom, pMat);
+      pupilGroup.add(pMesh);
+
+      // Pupil Dense Wireframe
+      const pWireGeom = new THREE.WireframeGeometry(pGeom);
+      const pWireMat = new THREE.LineBasicMaterial({
+        color: 0xfacc15,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const pWire = new THREE.LineSegments(pWireGeom, pWireMat);
+      pWire.visible = false;
+      pupilGroup.add(pWire);
+      wireframeLines.push(pWire);
+
+      // Pupil Aperture Margin Outline Ring (Clean circle bounding the pupil)
+      const pApertureRing = createCircleLoop(pupilRadius, 0xfacc15, 'xy', 0.05, eyeRadius, 0.95);
+      pApertureRing.visible = false;
+      pupilGroup.add(pApertureRing);
+      outlineLines.push(pApertureRing);
+
+      return {
+        group: g,
+        scleraMesh: sMesh,
+        irisMesh: iMesh,
+        pupilMesh: pMesh,
+        pupilGroup,
+        wireframeLines,
+        outlineLines,
+      };
+    };
+
+    const leftEye = createEyeSubGroup();
+    const rightEye = createEyeSubGroup();
+    charGroup.add(leftEye.group);
+    charGroup.add(rightEye.group);
 
     this.characterNodes.set(char.id, {
       group: charGroup,
@@ -471,8 +622,10 @@ export class EyeScene {
       partMeshes,
       unifiedMesh,
       jointSpheres,
-      leftEyeGroup,
-      rightEyeGroup,
+      leftEyeGroup: leftEye.group,
+      rightEyeGroup: rightEye.group,
+      leftEye,
+      rightEye,
     });
   }
 
@@ -605,7 +758,7 @@ export class EyeScene {
         node.skeletonGroup.add(node.boneLines);
       }
 
-      // 4. Update Procedural Eyes position & rotation
+      // 4. Update Procedural Eyes position & rotation (with independent pupil offset/decoupling)
       const leftEyeJoint = char.bodyData.skeleton.getJoint('leftEye');
       const rightEyeJoint = char.bodyData.skeleton.getJoint('rightEye');
 
@@ -622,6 +775,17 @@ export class EyeScene {
           'YXZ'
         );
         node.leftEyeGroup.quaternion.setFromEuler(euler);
+
+        // Independent pupil offset & scale
+        const pOff = char.pupilOffset || { x: 0, y: 0 };
+        const pScale = char.pupilScale || 1.0;
+        if (node.leftEye.pupilGroup) {
+          node.leftEye.pupilGroup.position.set(pOff.x, pOff.y, 0.01);
+          node.leftEye.pupilGroup.scale.set(pScale, pScale, 1.0);
+        } else {
+          node.leftEye.pupilMesh.position.set(pOff.x, pOff.y, 0.01);
+          node.leftEye.pupilMesh.scale.set(pScale, pScale, 1.0);
+        }
       }
 
       if (rightEyeJoint && node.rightEyeGroup) {
@@ -637,7 +801,66 @@ export class EyeScene {
           'YXZ'
         );
         node.rightEyeGroup.quaternion.setFromEuler(euler);
+
+        const pOff = char.pupilOffset || { x: 0, y: 0 };
+        const pScale = char.pupilScale || 1.0;
+        if (node.rightEye.pupilGroup) {
+          node.rightEye.pupilGroup.position.set(pOff.x, pOff.y, 0.01);
+          node.rightEye.pupilGroup.scale.set(pScale, pScale, 1.0);
+        } else {
+          node.rightEye.pupilMesh.position.set(pOff.x, pOff.y, 0.01);
+          node.rightEye.pupilMesh.scale.set(pScale, pScale, 1.0);
+        }
       }
+
+      // 4b. Update Eye Wireframe, Outlines & Outline-Only Transparency
+      const isOutlineOnly = !!(this.currentSettings.showEyeOutlineOnly || char.eyeOutlineOnly);
+      const isEyeWire = !isOutlineOnly && !!(this.currentSettings.showEyeWireframe || this.currentSettings.wireframe || char.eyeWireframe);
+      const isEyeOutline = isOutlineOnly || !!(this.currentSettings.showEyeOutlines || char.eyeOutlines);
+
+      let solidOpacity = 1.0;
+      if (isOutlineOnly) {
+        solidOpacity = 0.0;
+      } else if (this.currentSettings.eyeSolidOpacity !== undefined) {
+        solidOpacity = this.currentSettings.eyeSolidOpacity;
+      } else if (char.eyeOpacity !== undefined) {
+        solidOpacity = char.eyeOpacity;
+      }
+
+      const applyEyeDisplay = (eyeNodes: EyeRenderNodes) => {
+        const isSolidVisible = solidOpacity > 0.001;
+
+        eyeNodes.scleraMesh.visible = isSolidVisible;
+        eyeNodes.irisMesh.visible = isSolidVisible;
+        eyeNodes.pupilMesh.visible = isSolidVisible;
+
+        if (isSolidVisible) {
+          const sMat = eyeNodes.scleraMesh.material as THREE.MeshStandardMaterial;
+          sMat.wireframe = isEyeWire;
+          sMat.transparent = solidOpacity < 0.99;
+          sMat.opacity = solidOpacity;
+
+          const iMat = eyeNodes.irisMesh.material as THREE.MeshStandardMaterial;
+          iMat.wireframe = isEyeWire;
+          iMat.transparent = solidOpacity < 0.99;
+          iMat.opacity = solidOpacity;
+
+          const pMat = eyeNodes.pupilMesh.material as THREE.MeshBasicMaterial;
+          pMat.wireframe = isEyeWire;
+          pMat.transparent = solidOpacity < 0.99;
+          pMat.opacity = solidOpacity;
+        }
+
+        for (const wire of eyeNodes.wireframeLines) {
+          wire.visible = isEyeWire;
+        }
+        for (const outline of eyeNodes.outlineLines) {
+          outline.visible = isEyeOutline;
+        }
+      };
+
+      if (node.leftEye) applyEyeDisplay(node.leftEye);
+      if (node.rightEye) applyEyeDisplay(node.rightEye);
 
       // 5. Evaluate Gaze for character
       const gazeAnalysis = char.evaluateGaze(targetSpecs);
@@ -827,6 +1050,9 @@ export class EyeScene {
     }
 
     const wf = this.currentSettings.wireframe;
+    const isEyeWire = !!(this.currentSettings.showEyeWireframe || this.currentSettings.wireframe);
+    const isEyeOutline = !!this.currentSettings.showEyeOutlines;
+
     for (const [charId, node] of this.characterNodes.entries()) {
       const char = this.characters.find((c) => c.id === charId);
       for (const [partId, m] of node.partMeshes.entries()) {
@@ -836,6 +1062,51 @@ export class EyeScene {
       if (node.unifiedMesh) {
         (node.unifiedMesh.material as THREE.MeshStandardMaterial).wireframe = wf;
       }
+
+      // Update Eyes wireframe, outlines & outline-only
+      const isOutlineOnly = !!(this.currentSettings.showEyeOutlineOnly || char?.eyeOutlineOnly);
+      const charEyeWire = !isOutlineOnly && !!(this.currentSettings.showEyeWireframe || this.currentSettings.wireframe || char?.eyeWireframe);
+      const charEyeOutline = isOutlineOnly || !!(this.currentSettings.showEyeOutlines || char?.eyeOutlines);
+
+      let solidOpacity = 1.0;
+      if (isOutlineOnly) {
+        solidOpacity = 0.0;
+      } else if (this.currentSettings.eyeSolidOpacity !== undefined) {
+        solidOpacity = this.currentSettings.eyeSolidOpacity;
+      } else if (char?.eyeOpacity !== undefined) {
+        solidOpacity = char.eyeOpacity;
+      }
+
+      const applyEye = (eyeNodes: EyeRenderNodes) => {
+        const isSolidVisible = solidOpacity > 0.001;
+
+        eyeNodes.scleraMesh.visible = isSolidVisible;
+        eyeNodes.irisMesh.visible = isSolidVisible;
+        eyeNodes.pupilMesh.visible = isSolidVisible;
+
+        if (isSolidVisible) {
+          const sMat = eyeNodes.scleraMesh.material as THREE.MeshStandardMaterial;
+          sMat.wireframe = charEyeWire;
+          sMat.transparent = solidOpacity < 0.99;
+          sMat.opacity = solidOpacity;
+
+          const iMat = eyeNodes.irisMesh.material as THREE.MeshStandardMaterial;
+          iMat.wireframe = charEyeWire;
+          iMat.transparent = solidOpacity < 0.99;
+          iMat.opacity = solidOpacity;
+
+          const pMat = eyeNodes.pupilMesh.material as THREE.MeshBasicMaterial;
+          pMat.wireframe = charEyeWire;
+          pMat.transparent = solidOpacity < 0.99;
+          pMat.opacity = solidOpacity;
+        }
+
+        for (const wire of eyeNodes.wireframeLines) wire.visible = charEyeWire;
+        for (const outline of eyeNodes.outlineLines) outline.visible = charEyeOutline;
+      };
+
+      if (node.leftEye) applyEye(node.leftEye);
+      if (node.rightEye) applyEye(node.rightEye);
     }
   }
 
@@ -855,6 +1126,46 @@ export class EyeScene {
     const target = this.latestGazeAverage.centerPoint;
     for (const char of this.characters) {
       char.setGazeTarget(target);
+    }
+    this.updateAllCharacters();
+  }
+
+  /**
+   * Focus character eyes directly on the active 3D camera
+   */
+  public focusEyesOnCamera(charId?: string): void {
+    const camPos = new Vec3(this.camera.position.x, this.camera.position.y, this.camera.position.z);
+    const targetChars = charId ? this.characters.filter((c) => c.id === charId) : this.characters;
+    for (const char of targetChars) {
+      char.setGazeTarget(camPos);
+    }
+    this.updateAllCharacters();
+  }
+
+  /**
+   * Resets character eyes to neutral straight ahead (0°, 0°)
+   */
+  public focusEyesStraight(charId?: string): void {
+    const targetChars = charId ? this.characters.filter((c) => c.id === charId) : this.characters;
+    for (const char of targetChars) {
+      char.lookStraight();
+    }
+    this.updateAllCharacters();
+  }
+
+  /**
+   * Directs character eyes to look directly at the target plane center
+   */
+  public focusEyesOnTarget(charId?: string): void {
+    const targetZ = this.currentSettings.targetPlaneZ;
+    const targetPos = new Vec3(
+      this.currentRefConfig?.worldPosition?.x ?? 0,
+      this.currentRefConfig?.worldPosition?.y ?? 90,
+      targetZ
+    );
+    const targetChars = charId ? this.characters.filter((c) => c.id === charId) : this.characters;
+    for (const char of targetChars) {
+      char.setGazeTarget(targetPos);
     }
     this.updateAllCharacters();
   }

@@ -16,6 +16,7 @@ import {
   Grid,
   Activity,
   Layers,
+  Eye,
 } from 'lucide-react';
 
 import { SceneGazeAverage } from '../rendering/EyeScene';
@@ -31,6 +32,12 @@ interface StatusBarProps {
   sceneGazeAverage?: SceneGazeAverage;
   showSoccerBall?: boolean;
   onToggleSoccerBall?: () => void;
+  showEyeWireframe?: boolean;
+  onToggleEyeWireframe?: () => void;
+  showEyeOutlines?: boolean;
+  onToggleEyeOutlines?: () => void;
+  showEyeOutlineOnly?: boolean;
+  onToggleEyeOutlineOnly?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -44,6 +51,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   sceneGazeAverage,
   showSoccerBall = true,
   onToggleSoccerBall,
+  showEyeWireframe = false,
+  onToggleEyeWireframe,
+  showEyeOutlines = false,
+  onToggleEyeOutlines,
+  showEyeOutlineOnly = false,
+  onToggleEyeOutlineOnly,
 }) => {
   // Collapsed by default on mobile screens so it never pushes or covers elements
   const [isExpanded, setIsExpanded] = useState(false);
@@ -97,6 +110,54 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             </button>
           )}
 
+          {/* Quick Eye Wireframe Toggle Pill */}
+          {onToggleEyeWireframe && (
+            <button
+              onClick={onToggleEyeWireframe}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
+                showEyeWireframe
+                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600/80'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+              title="Toggle Eye Wireframe"
+            >
+              <Eye className="w-3 h-3 text-cyan-400" />
+              <span>{showEyeWireframe ? 'EyeWire ON' : 'EyeWire'}</span>
+            </button>
+          )}
+
+          {/* Quick Eye Outlines Toggle Pill */}
+          {onToggleEyeOutlines && (
+            <button
+              onClick={onToggleEyeOutlines}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
+                showEyeOutlines
+                  ? 'bg-teal-950 text-teal-300 border-teal-500/80'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+              title="Toggle Eye Outlines"
+            >
+              <span className="text-[10px]">✏️</span>
+              <span>{showEyeOutlines ? 'Outlines ON' : 'Outlines'}</span>
+            </button>
+          )}
+
+          {/* Quick Eye Outline Only Toggle Pill */}
+          {onToggleEyeOutlineOnly && (
+            <button
+              onClick={onToggleEyeOutlineOnly}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
+                showEyeOutlineOnly
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+              title="Toggle Eye Outline Only (Hollow & clear over background picture)"
+            >
+              <span className="text-[10px]">✨</span>
+              <span>{showEyeOutlineOnly ? 'OutlineOnly ON' : 'OutlineOnly'}</span>
+            </button>
+          )}
+
           <span className="text-slate-600">|</span>
 
           {sceneGazeAverage && (
@@ -126,7 +187,53 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Quick Eye Wireframe Toggle */}
+              {onToggleEyeWireframe && (
+                <button
+                  onClick={onToggleEyeWireframe}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer border ${
+                    showEyeWireframe
+                      ? 'bg-cyan-950 text-cyan-300 border-cyan-600/80'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Toggle Eye Wireframe"
+                >
+                  <Eye className="w-3 h-3 text-cyan-400" />
+                  <span>Eye Wire {showEyeWireframe ? 'ON' : 'OFF'}</span>
+                </button>
+              )}
+
+              {/* Quick Eye Outlines Toggle */}
+              {onToggleEyeOutlines && (
+                <button
+                  onClick={onToggleEyeOutlines}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer border ${
+                    showEyeOutlines
+                      ? 'bg-teal-950 text-teal-300 border-teal-500/80'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Toggle Eye Outlines"
+                >
+                  <span>✏️ Eye Outlines {showEyeOutlines ? 'ON' : 'OFF'}</span>
+                </button>
+              )}
+
+              {/* Quick Eye Outline Only Toggle */}
+              {onToggleEyeOutlineOnly && (
+                <button
+                  onClick={onToggleEyeOutlineOnly}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer border ${
+                    showEyeOutlineOnly
+                      ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Toggle Eye Outline Only (Hollow & clear over background picture)"
+                >
+                  <span>✨ Outline Only {showEyeOutlineOnly ? 'ON' : 'OFF'}</span>
+                </button>
+              )}
+
               {/* Quick Soccer Ball Toggle */}
               {onToggleSoccerBall && (
                 <button
@@ -154,7 +261,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   title="Toggle Global Wireframe"
                 >
                   <Grid className="w-3 h-3 text-purple-400" />
-                  <span>Wireframe {isWireframe ? 'ON' : 'OFF'}</span>
+                  <span>Wire {isWireframe ? 'ON' : 'OFF'}</span>
                 </button>
               )}
 

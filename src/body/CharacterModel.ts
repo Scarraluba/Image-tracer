@@ -84,8 +84,46 @@ export class CharacterModel {
   showGazeRays: boolean = true;
   bodyColor: string = '#38bdf8';
 
+  // Eye Display: Wireframe, Outlines & Outline-Only
+  eyeWireframe: boolean = false;
+  eyeOutlines: boolean = false;
+  eyeOutlineOnly: boolean = false; // When true, hides solid surface so underlying reference photo is 100% visible
+  eyeOpacity: number = 1.0; // 0.0 (fully transparent/hollow) to 1.0 (fully solid)
+
+  // Pupil micro-offset relative to center (so pupil doesn't always look at target)
+  pupilOffset: { x: number; y: number } = { x: 0, y: 0 };
+  pupilScale: number = 1.0;
+  lookAtTarget: boolean = false; // Decoupled by default: pupils do not always look at target!
+
   // Per-body-part visibility & wireframe map
   partDisplayStates: Record<string, BodyPartDisplayState> = {};
+
+  /**
+   * Sets eye display preset mode
+   */
+  setEyeDisplayMode(mode: 'solid' | 'outline-only' | 'wireframe' | 'both'): void {
+    if (mode === 'solid') {
+      this.eyeWireframe = false;
+      this.eyeOutlines = false;
+      this.eyeOutlineOnly = false;
+      this.eyeOpacity = 1.0;
+    } else if (mode === 'outline-only') {
+      this.eyeWireframe = false;
+      this.eyeOutlines = true;
+      this.eyeOutlineOnly = true;
+      this.eyeOpacity = 0.0;
+    } else if (mode === 'wireframe') {
+      this.eyeWireframe = true;
+      this.eyeOutlines = false;
+      this.eyeOutlineOnly = false;
+      this.eyeOpacity = 1.0;
+    } else if (mode === 'both') {
+      this.eyeWireframe = true;
+      this.eyeOutlines = true;
+      this.eyeOutlineOnly = false;
+      this.eyeOpacity = 1.0;
+    }
+  }
 
   constructor(
     id: string,
@@ -422,6 +460,54 @@ export class CharacterModel {
     if (rightEyeJoint) {
       const rightAngles = orientEye(rightEyeJoint.currentWorldPosition);
       this.rightEyeGaze = { yawDeg: rightAngles.yawDeg, pitchDeg: rightAngles.pitchDeg, color: this.rightEyeGaze.color };
+    }
+    this.lookAtTarget = true;
+  }
+
+  /**
+   * Resets pupil and eye orientation to neutral straight ahead (0, 0) relative to head.
+   */
+  lookStraight(): void {
+    this.leftEyeGaze = { yawDeg: 0, pitchDeg: 0, color: this.leftEyeGaze.color };
+    this.rightEyeGaze = { yawDeg: 0, pitchDeg: 0, color: this.rightEyeGaze.color };
+    this.pupilOffset = { x: 0, y: 0 };
+    this.lookAtTarget = false;
+  }
+
+  /**
+   * Directs eyes away from the target to a natural gaze angle.
+   */
+  lookAway(preset: 'left' | 'right' | 'up' | 'down' | 'up-left' | 'down-right' = 'left'): void {
+    this.lookAtTarget = false;
+    switch (preset) {
+      case 'left':
+        this.leftEyeGaze.yawDeg = -22;
+        this.rightEyeGaze.yawDeg = -22;
+        break;
+      case 'right':
+        this.leftEyeGaze.yawDeg = 22;
+        this.rightEyeGaze.yawDeg = 22;
+        break;
+      case 'up':
+        this.leftEyeGaze.pitchDeg = -18;
+        this.rightEyeGaze.pitchDeg = -18;
+        break;
+      case 'down':
+        this.leftEyeGaze.pitchDeg = 18;
+        this.rightEyeGaze.pitchDeg = 18;
+        break;
+      case 'up-left':
+        this.leftEyeGaze.yawDeg = -20;
+        this.leftEyeGaze.pitchDeg = -14;
+        this.rightEyeGaze.yawDeg = -20;
+        this.rightEyeGaze.pitchDeg = -14;
+        break;
+      case 'down-right':
+        this.leftEyeGaze.yawDeg = 20;
+        this.leftEyeGaze.pitchDeg = 14;
+        this.rightEyeGaze.yawDeg = 20;
+        this.rightEyeGaze.pitchDeg = 14;
+        break;
     }
   }
 }

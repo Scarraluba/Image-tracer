@@ -61,6 +61,10 @@ export default function App() {
     targetPlaneZ: 120.0,
     showSoccerBall: true,
     soccerBallRadius: 4.8,
+    showEyeWireframe: false,
+    showEyeOutlines: false,
+    showEyeOutlineOnly: false,
+    eyeSolidOpacity: 1.0,
   });
 
   const [referenceConfig, setReferenceConfig] = useState<ReferenceImageConfig>(DEFAULT_REFERENCE_IMAGE);
@@ -170,6 +174,68 @@ export default function App() {
     }
   }, [forceSceneUpdate]);
 
+  // 1-Click Toggle for Eye Wireframe (Mesh polygons)
+  const handleToggleEyeWireframe = useCallback(() => {
+    setSettings((prev) => {
+      const updated = { ...prev, showEyeWireframe: !prev.showEyeWireframe };
+      if (sceneRef.current) {
+        sceneRef.current.updateSettings(updated);
+      }
+      return updated;
+    });
+  }, []);
+
+  // 1-Click Toggle for Eye Outlines (Anatomical limbus & pupil margins)
+  const handleToggleEyeOutlines = useCallback(() => {
+    setSettings((prev) => {
+      const updated = { ...prev, showEyeOutlines: !prev.showEyeOutlines };
+      if (sceneRef.current) {
+        sceneRef.current.updateSettings(updated);
+      }
+      return updated;
+    });
+  }, []);
+
+  // 1-Click Toggle for Eye Outline Only (Hollow & completely see-through over picture)
+  const handleToggleEyeOutlineOnly = useCallback(() => {
+    setSettings((prev) => {
+      const nextVal = !prev.showEyeOutlineOnly;
+      const updated: ViewportSettings = {
+        ...prev,
+        showEyeOutlineOnly: nextVal,
+        showEyeOutlines: nextVal ? true : prev.showEyeOutlines,
+      };
+      if (sceneRef.current) {
+        sceneRef.current.updateSettings(updated);
+      }
+      return updated;
+    });
+  }, []);
+
+  // Direct active character gaze straight (0, 0)
+  const handleFocusEyesStraight = useCallback(() => {
+    if (sceneRef.current) {
+      sceneRef.current.focusEyesStraight(activeCharacterId);
+      forceSceneUpdate();
+    }
+  }, [activeCharacterId, forceSceneUpdate]);
+
+  // Direct active character gaze to face camera
+  const handleFocusEyesOnCamera = useCallback(() => {
+    if (sceneRef.current) {
+      sceneRef.current.focusEyesOnCamera(activeCharacterId);
+      forceSceneUpdate();
+    }
+  }, [activeCharacterId, forceSceneUpdate]);
+
+  // Direct active character gaze back onto target board
+  const handleFocusEyesOnTarget = useCallback(() => {
+    if (sceneRef.current) {
+      sceneRef.current.focusEyesOnTarget(activeCharacterId);
+      forceSceneUpdate();
+    }
+  }, [activeCharacterId, forceSceneUpdate]);
+
   const handleResetPose = useCallback(() => {
     if (activeChar) {
       activeChar.applyPose('Relaxed / A-Pose');
@@ -238,6 +304,13 @@ export default function App() {
           rightEyeGaze: { pitchDeg: c.rightEyeGaze.pitchDeg, yawDeg: c.rightEyeGaze.yawDeg },
           jointRotations,
           partDisplayStates: { ...c.partDisplayStates },
+          eyeWireframe: c.eyeWireframe,
+          eyeOutlines: c.eyeOutlines,
+          eyeOutlineOnly: c.eyeOutlineOnly,
+          eyeOpacity: c.eyeOpacity,
+          pupilOffset: { ...c.pupilOffset },
+          pupilScale: c.pupilScale,
+          lookAtTarget: c.lookAtTarget,
         };
       }),
       referenceConfig: { ...referenceConfig },
@@ -268,6 +341,14 @@ export default function App() {
       char.leftEyeGaze.yawDeg = sc.leftEyeGaze.yawDeg;
       char.rightEyeGaze.pitchDeg = sc.rightEyeGaze.pitchDeg;
       char.rightEyeGaze.yawDeg = sc.rightEyeGaze.yawDeg;
+
+      if (sc.eyeWireframe !== undefined) char.eyeWireframe = sc.eyeWireframe;
+      if (sc.eyeOutlines !== undefined) char.eyeOutlines = sc.eyeOutlines;
+      if (sc.eyeOutlineOnly !== undefined) char.eyeOutlineOnly = sc.eyeOutlineOnly;
+      if (sc.eyeOpacity !== undefined) char.eyeOpacity = sc.eyeOpacity;
+      if (sc.pupilOffset) char.pupilOffset = { ...sc.pupilOffset };
+      if (sc.pupilScale !== undefined) char.pupilScale = sc.pupilScale;
+      if (sc.lookAtTarget !== undefined) char.lookAtTarget = sc.lookAtTarget;
 
       if (sc.partDisplayStates) {
         char.partDisplayStates = { ...sc.partDisplayStates };
@@ -388,6 +469,12 @@ export default function App() {
         targetPlaneVisible={settings.showTargetPlane}
         onToggleSoccerBall={handleToggleSoccerBall}
         soccerBallVisible={settings.showSoccerBall !== false}
+        onToggleEyeWireframe={handleToggleEyeWireframe}
+        eyeWireframeVisible={settings.showEyeWireframe || false}
+        onToggleEyeOutlines={handleToggleEyeOutlines}
+        eyeOutlinesVisible={settings.showEyeOutlines || false}
+        onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
+        eyeOutlineOnlyVisible={settings.showEyeOutlineOnly || false}
       />
 
       {/* Main Workspace with Dynamic Responsive Layout */}
@@ -459,6 +546,15 @@ export default function App() {
                   showSoccerBall={settings.showSoccerBall !== false}
                   onToggleSoccerBall={handleToggleSoccerBall}
                   onFocusAllOnSoccerBall={handleFocusAllOnSoccerBall}
+                  showEyeWireframe={settings.showEyeWireframe}
+                  onToggleEyeWireframe={handleToggleEyeWireframe}
+                  showEyeOutlines={settings.showEyeOutlines}
+                  onToggleEyeOutlines={handleToggleEyeOutlines}
+                  showEyeOutlineOnly={settings.showEyeOutlineOnly}
+                  onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
+                  onFocusEyesStraight={handleFocusEyesStraight}
+                  onFocusEyesOnCamera={handleFocusEyesOnCamera}
+                  onFocusEyesOnTarget={handleFocusEyesOnTarget}
                 />
               </div>
             </div>
@@ -507,6 +603,15 @@ export default function App() {
                 showSoccerBall={settings.showSoccerBall !== false}
                 onToggleSoccerBall={handleToggleSoccerBall}
                 onFocusAllOnSoccerBall={handleFocusAllOnSoccerBall}
+                showEyeWireframe={settings.showEyeWireframe}
+                onToggleEyeWireframe={handleToggleEyeWireframe}
+                showEyeOutlines={settings.showEyeOutlines}
+                onToggleEyeOutlines={handleToggleEyeOutlines}
+                showEyeOutlineOnly={settings.showEyeOutlineOnly}
+                onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
+                onFocusEyesStraight={handleFocusEyesStraight}
+                onFocusEyesOnCamera={handleFocusEyesOnCamera}
+                onFocusEyesOnTarget={handleFocusEyesOnTarget}
               />
             </MobileDrawer>
           </div>
@@ -556,6 +661,15 @@ export default function App() {
                 showSoccerBall={settings.showSoccerBall !== false}
                 onToggleSoccerBall={handleToggleSoccerBall}
                 onFocusAllOnSoccerBall={handleFocusAllOnSoccerBall}
+                showEyeWireframe={settings.showEyeWireframe}
+                onToggleEyeWireframe={handleToggleEyeWireframe}
+                showEyeOutlines={settings.showEyeOutlines}
+                onToggleEyeOutlines={handleToggleEyeOutlines}
+                showEyeOutlineOnly={settings.showEyeOutlineOnly}
+                onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
+                onFocusEyesStraight={handleFocusEyesStraight}
+                onFocusEyesOnCamera={handleFocusEyesOnCamera}
+                onFocusEyesOnTarget={handleFocusEyesOnTarget}
               />
             </div>
           </div>
@@ -573,6 +687,12 @@ export default function App() {
           sceneGazeAverage={sceneGazeAverage}
           showSoccerBall={settings.showSoccerBall !== false}
           onToggleSoccerBall={handleToggleSoccerBall}
+          showEyeWireframe={settings.showEyeWireframe}
+          onToggleEyeWireframe={handleToggleEyeWireframe}
+          showEyeOutlines={settings.showEyeOutlines}
+          onToggleEyeOutlines={handleToggleEyeOutlines}
+          showEyeOutlineOnly={settings.showEyeOutlineOnly}
+          onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
         />
       </div>
 

@@ -20,6 +20,13 @@ export interface SerializedCharacter {
   rightEyeGaze: { pitchDeg: number; yawDeg: number };
   jointRotations: Record<string, { pitchDeg: number; yawDeg: number; rollDeg: number }>;
   partDisplayStates?: Record<string, { visible: boolean; wireframe: boolean }>;
+  eyeWireframe?: boolean;
+  eyeOutlines?: boolean;
+  eyeOutlineOnly?: boolean;
+  eyeOpacity?: number;
+  pupilOffset?: { x: number; y: number };
+  pupilScale?: number;
+  lookAtTarget?: boolean;
 }
 
 export interface ProjectData {

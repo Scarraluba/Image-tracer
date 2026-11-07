@@ -47,6 +47,15 @@ interface SelectedPanelContentProps {
   showSoccerBall?: boolean;
   onToggleSoccerBall?: () => void;
   onFocusAllOnSoccerBall?: () => void;
+  showEyeWireframe?: boolean;
+  onToggleEyeWireframe?: () => void;
+  showEyeOutlines?: boolean;
+  onToggleEyeOutlines?: () => void;
+  showEyeOutlineOnly?: boolean;
+  onToggleEyeOutlineOnly?: () => void;
+  onFocusEyesStraight?: () => void;
+  onFocusEyesOnCamera?: () => void;
+  onFocusEyesOnTarget?: () => void;
 }
 
 export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
@@ -65,6 +74,15 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
   showSoccerBall = true,
   onToggleSoccerBall,
   onFocusAllOnSoccerBall,
+  showEyeWireframe = false,
+  onToggleEyeWireframe,
+  showEyeOutlines = false,
+  onToggleEyeOutlines,
+  showEyeOutlineOnly = false,
+  onToggleEyeOutlineOnly,
+  onFocusEyesStraight,
+  onFocusEyesOnCamera,
+  onFocusEyesOnTarget,
 }) => {
   const [syncEyes, setSyncEyes] = useState(true);
   const selectedJoint = character.bodyData.skeleton.getJoint(character.selectedJointId);
@@ -730,6 +748,401 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
                 <span>Focus All Scene Actors on Soccer Ball</span>
               </button>
             )}
+          </div>
+
+          {/* Eye Anatomical Rendering: Wireframe & Outlines Card */}
+          {/* Eye Wireframe & Outlines Card with Outline-Only Mode */}
+          <div className="p-3 bg-slate-950/85 rounded-xl border border-cyan-900/50 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-cyan-400" />
+                <div>
+                  <span className="text-[11px] uppercase font-bold tracking-wider text-cyan-400 block">
+                    Eye Display: Outline Only &amp; Wireframe
+                  </span>
+                  <span className="text-[9px] text-slate-400">
+                    Use Outline Only to see reference picture clearly behind without dense mesh clutter
+                  </span>
+                </div>
+              </div>
+              {(character.eyeOutlineOnly || showEyeOutlineOnly) && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/80 font-bold">
+                  ✏️ Tracing
+                </span>
+              )}
+            </div>
+
+            {/* Mode Selector Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+              {/* Solid Mode */}
+              <button
+                onClick={() => {
+                  character.setEyeDisplayMode('solid');
+                  if (onToggleEyeWireframe && showEyeWireframe) onToggleEyeWireframe();
+                  if (onToggleEyeOutlines && showEyeOutlines) onToggleEyeOutlines();
+                  if (onToggleEyeOutlineOnly && showEyeOutlineOnly) onToggleEyeOutlineOnly();
+                  onUpdateCharacter();
+                }}
+                className={`py-1.5 px-2 rounded-lg text-[10px] font-semibold border flex items-center justify-center gap-1 transition-colors ${
+                  !character.eyeOutlineOnly && !showEyeOutlineOnly && !character.eyeWireframe && !showEyeWireframe && !character.eyeOutlines && !showEyeOutlines
+                    ? 'bg-cyan-950 text-cyan-300 border-cyan-600 shadow-xs'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+                title="Full 3D solid surface"
+              >
+                <Box className="w-3 h-3" />
+                <span>Solid</span>
+              </button>
+
+              {/* Outline Only Mode (Recommended for tracing reference photo) */}
+              <button
+                onClick={() => {
+                  if (character.eyeOutlineOnly || showEyeOutlineOnly) {
+                    character.setEyeDisplayMode('solid');
+                    if (onToggleEyeOutlineOnly && showEyeOutlineOnly) onToggleEyeOutlineOnly();
+                  } else {
+                    character.setEyeDisplayMode('outline-only');
+                    if (onToggleEyeOutlineOnly && !showEyeOutlineOnly) onToggleEyeOutlineOnly();
+                  }
+                  onUpdateCharacter();
+                }}
+                className={`py-1.5 px-2 rounded-lg text-[10px] font-semibold border flex items-center justify-center gap-1 transition-colors ${
+                  character.eyeOutlineOnly || showEyeOutlineOnly
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow-sm ring-1 ring-emerald-500/40 font-bold'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-850 hover:text-emerald-300'
+                }`}
+                title="Clean circular outline only: Hides solid surface and dense wireframe triangles so the picture behind is 100% visible"
+              >
+                <span className="text-xs">✏️</span>
+                <span>Outline Only</span>
+              </button>
+
+              {/* Wireframe Mode */}
+              <button
+                onClick={() => {
+                  if (character.eyeOutlineOnly) character.eyeOutlineOnly = false;
+                  if (showEyeOutlineOnly && onToggleEyeOutlineOnly) onToggleEyeOutlineOnly();
+                  character.eyeWireframe = !character.eyeWireframe;
+                  if (onToggleEyeWireframe) onToggleEyeWireframe();
+                  onUpdateCharacter();
+                }}
+                className={`py-1.5 px-2 rounded-lg text-[10px] font-semibold border flex items-center justify-center gap-1 transition-colors ${
+                  !character.eyeOutlineOnly && !showEyeOutlineOnly && (character.eyeWireframe || showEyeWireframe)
+                    ? 'bg-cyan-950 text-cyan-300 border-cyan-500 shadow-xs'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+                title="Dense triangular wireframe mesh"
+              >
+                <Grid className="w-3 h-3 text-cyan-400" />
+                <span>Wireframe</span>
+              </button>
+
+              {/* Both Mode */}
+              <button
+                onClick={() => {
+                  if (character.eyeOutlineOnly) character.eyeOutlineOnly = false;
+                  if (showEyeOutlineOnly && onToggleEyeOutlineOnly) onToggleEyeOutlineOnly();
+                  character.setEyeDisplayMode('both');
+                  if (onToggleEyeWireframe && !showEyeWireframe) onToggleEyeWireframe();
+                  if (onToggleEyeOutlines && !showEyeOutlines) onToggleEyeOutlines();
+                  onUpdateCharacter();
+                }}
+                className={`py-1.5 px-2 rounded-lg text-[10px] font-semibold border flex items-center justify-center gap-1 transition-colors ${
+                  !character.eyeOutlineOnly && !showEyeOutlineOnly && (character.eyeWireframe || showEyeWireframe) && (character.eyeOutlines || showEyeOutlines)
+                    ? 'bg-sky-950 text-sky-200 border-sky-400 shadow-xs'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+                title="Wireframe mesh + anatomical outlines"
+              >
+                <Layers className="w-3 h-3 text-sky-400" />
+                <span>Both</span>
+              </button>
+            </div>
+
+            {/* Tracing Notice Banner when Outline Only is active */}
+            {(character.eyeOutlineOnly || showEyeOutlineOnly) && (
+              <div className="p-2 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-[10px] text-emerald-300/90 leading-tight flex items-start gap-1.5">
+                <span className="shrink-0 text-xs">👁️</span>
+                <span>
+                  <strong>Clean Outline Mode Active:</strong> Solid eye fill and dense wireframe triangles are hidden. The reference photo behind is completely unobstructed for precise tracing.
+                </span>
+              </div>
+            )}
+
+            {/* Eye Surface Opacity / Translucency Slider */}
+            <div className="pt-2 border-t border-slate-900 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-400 font-medium">Eye Surface Fill Opacity:</span>
+                <span className="font-mono text-cyan-400 font-semibold">
+                  {Math.round((character.eyeOpacity ?? 1.0) * 100)}%
+                  {(character.eyeOpacity ?? 1.0) <= 0.05 ? ' (Hollow)' : (character.eyeOpacity ?? 1.0) >= 0.95 ? ' (Solid)' : ' (Translucent)'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={character.eyeOpacity ?? 1.0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  character.eyeOpacity = val;
+                  if (val <= 0.01) {
+                    character.eyeOutlineOnly = true;
+                    character.eyeOutlines = true;
+                  } else {
+                    character.eyeOutlineOnly = false;
+                  }
+                  onUpdateCharacter();
+                }}
+                className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+              />
+              <div className="flex items-center justify-between text-[9px] text-slate-500">
+                <button
+                  type="button"
+                  onClick={() => {
+                    character.eyeOpacity = 0.0;
+                    character.eyeOutlineOnly = true;
+                    character.eyeOutlines = true;
+                    onUpdateCharacter();
+                  }}
+                  className="hover:text-emerald-300 transition-colors"
+                >
+                  0% (Hollow)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    character.eyeOpacity = 0.35;
+                    character.eyeOutlineOnly = false;
+                    character.eyeOutlines = true;
+                    onUpdateCharacter();
+                  }}
+                  className="hover:text-cyan-300 transition-colors"
+                >
+                  35% Ghosted
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    character.eyeOpacity = 1.0;
+                    character.eyeOutlineOnly = false;
+                    onUpdateCharacter();
+                  }}
+                  className="hover:text-slate-300 transition-colors"
+                >
+                  100% Solid
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Pupil Target Decoupling & Look Orientation Card */}
+          <div className="p-3 bg-slate-950/85 rounded-xl border border-slate-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">
+                Pupil Gaze &amp; Target Freedom
+              </span>
+              <span
+                className={`text-[9px] font-mono px-2 py-0.5 rounded border font-semibold ${
+                  character.lookAtTarget
+                    ? 'bg-amber-950/60 text-amber-300 border-amber-800/60'
+                    : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                }`}
+              >
+                {character.lookAtTarget ? 'Target Locked' : 'Free / Decoupled'}
+              </span>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Pupils do not have to look at the target board. Direct eyes freely, decouple them, or look at camera.
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {/* Free Look / Decouple */}
+              <button
+                onClick={() => {
+                  character.lookAtTarget = false;
+                  onUpdateCharacter();
+                }}
+                className={`py-1.5 px-2 rounded-lg text-[10px] font-semibold border flex items-center justify-center gap-1 transition-colors ${
+                  !character.lookAtTarget
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-600'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-850'
+                }`}
+                title="Decouple pupil from target"
+              >
+                <span>🔓 Free Look</span>
+              </button>
+
+              {/* Look Straight */}
+              <button
+                onClick={() => {
+                  if (onFocusEyesStraight) onFocusEyesStraight();
+                  else {
+                    character.lookStraight();
+                    onUpdateCharacter();
+                  }
+                }}
+                className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-slate-200 flex items-center justify-center gap-1 transition-colors"
+                title="Orient pupils straight ahead (0°, 0°)"
+              >
+                <span>👁️ Straight</span>
+              </button>
+
+              {/* Look Camera */}
+              {onFocusEyesOnCamera && (
+                <button
+                  onClick={onFocusEyesOnCamera}
+                  className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-sky-300 flex items-center justify-center gap-1 transition-colors"
+                  title="Direct pupil gaze directly towards camera position"
+                >
+                  <span>📷 Camera</span>
+                </button>
+              )}
+
+              {/* Look Target Center */}
+              {onFocusEyesOnTarget && (
+                <button
+                  onClick={onFocusEyesOnTarget}
+                  className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-amber-300 flex items-center justify-center gap-1 transition-colors"
+                  title="Look at target board center point"
+                >
+                  <span>🎯 Target</span>
+                </button>
+              )}
+            </div>
+
+            {/* Quick Look-Away Presets */}
+            <div className="pt-1 border-t border-slate-900 space-y-1">
+              <span className="text-[9px] uppercase font-semibold text-slate-500 block">
+                Look Away Presets (Off-Target Gaze)
+              </span>
+              <div className="grid grid-cols-4 gap-1">
+                <button
+                  onClick={() => {
+                    character.lookAway('left');
+                    onUpdateCharacter();
+                  }}
+                  className="py-1 px-1.5 rounded bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[9px] text-slate-300 font-medium text-center"
+                >
+                  ← Left
+                </button>
+                <button
+                  onClick={() => {
+                    character.lookAway('right');
+                    onUpdateCharacter();
+                  }}
+                  className="py-1 px-1.5 rounded bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[9px] text-slate-300 font-medium text-center"
+                >
+                  Right →
+                </button>
+                <button
+                  onClick={() => {
+                    character.lookAway('up');
+                    onUpdateCharacter();
+                  }}
+                  className="py-1 px-1.5 rounded bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[9px] text-slate-300 font-medium text-center"
+                >
+                  ↑ Up
+                </button>
+                <button
+                  onClick={() => {
+                    character.lookAway('down');
+                    onUpdateCharacter();
+                  }}
+                  className="py-1 px-1.5 rounded bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[9px] text-slate-300 font-medium text-center"
+                >
+                  ↓ Down
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Pupil Micro-Offset & Dilation Card */}
+          <div className="p-3 bg-slate-950/85 rounded-xl border border-slate-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">
+                Pupil Micro-Offset &amp; Aperture
+              </span>
+              <button
+                onClick={() => {
+                  character.pupilOffset = { x: 0, y: 0 };
+                  character.pupilScale = 1.0;
+                  onUpdateCharacter();
+                }}
+                className="text-[9px] text-sky-400 hover:text-sky-300 underline cursor-pointer"
+              >
+                Center Pupil
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                  <span>Pupil Offset X</span>
+                  <span className="font-mono text-slate-200">
+                    {(character.pupilOffset?.x || 0).toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-0.7"
+                  max="0.7"
+                  step="0.02"
+                  value={character.pupilOffset?.x || 0}
+                  onChange={(e) => {
+                    const x = parseFloat(e.target.value);
+                    character.pupilOffset = { ...(character.pupilOffset || { y: 0 }), x };
+                    onUpdateCharacter();
+                  }}
+                  className="w-full accent-cyan-500 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                  <span>Pupil Offset Y</span>
+                  <span className="font-mono text-slate-200">
+                    {(character.pupilOffset?.y || 0).toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-0.7"
+                  max="0.7"
+                  step="0.02"
+                  value={character.pupilOffset?.y || 0}
+                  onChange={(e) => {
+                    const y = parseFloat(e.target.value);
+                    character.pupilOffset = { ...(character.pupilOffset || { x: 0 }), y };
+                    onUpdateCharacter();
+                  }}
+                  className="w-full accent-cyan-500 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                  <span>Pupil Aperture</span>
+                  <span className="font-mono text-slate-200">
+                    {(character.pupilScale || 1.0).toFixed(2)}×
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.8"
+                  step="0.05"
+                  value={character.pupilScale || 1.0}
+                  onChange={(e) => {
+                    character.pupilScale = parseFloat(e.target.value);
+                    onUpdateCharacter();
+                  }}
+                  className="w-full accent-amber-500 cursor-pointer"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center justify-between p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">

@@ -53,6 +53,12 @@ interface TopToolbarProps {
   targetPlaneVisible?: boolean;
   onToggleSoccerBall?: () => void;
   soccerBallVisible?: boolean;
+  onToggleEyeWireframe?: () => void;
+  eyeWireframeVisible?: boolean;
+  onToggleEyeOutlines?: () => void;
+  eyeOutlinesVisible?: boolean;
+  onToggleEyeOutlineOnly?: () => void;
+  eyeOutlineOnlyVisible?: boolean;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -77,14 +83,32 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   targetPlaneVisible = true,
   onToggleSoccerBall,
   soccerBallVisible = true,
+  onToggleEyeWireframe,
+  eyeWireframeVisible,
+  onToggleEyeOutlines,
+  eyeOutlinesVisible,
+  onToggleEyeOutlineOnly,
+  eyeOutlineOnlyVisible,
 }) => {
   const activeChar = characters.find((c) => c.id === activeCharacterId);
 
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-800 px-3 md:px-4 flex items-center justify-between text-slate-200 select-none z-30 shrink-0">
+    <header className="min-h-14 py-2 bg-slate-900 border-b border-slate-800 px-2 sm:px-3 md:px-4 flex flex-wrap items-center justify-between gap-y-2 gap-x-2 text-slate-200 select-none z-30 shrink-0">
       {/* Brand, Projects & Actor Dropdown */}
-      <div className="flex items-center gap-2 md:gap-3">
- 
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-bold tracking-tight shrink-0">
+          <Eye className="w-4 h-4 text-sky-400" />
+        </div>
+        <div>
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <h1 className="font-bold text-xs md:text-sm tracking-wide text-slate-100 uppercase">
+              EYEW
+            </h1>
+            <span className="hidden sm:inline-block text-[9px] uppercase font-mono px-1 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60">
+              3D Engine
+            </span>
+          </div>
+        </div>
 
         {/* Projects Save/Load Button */}
         {onOpenProjects && (
@@ -150,11 +174,22 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           <span className="hidden sm:inline">Split</span>
         </button>
 
- 
+        <button
+          onClick={() => onSetLayoutMode('panel')}
+          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+            layoutMode === 'panel'
+              ? 'bg-sky-500 text-slate-950 font-bold shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+          title="Panel Only Focus Mode"
+        >
+          <LayoutTemplate className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Panel</span>
+        </button>
       </div>
 
-      {/* Right Actions: Wireframe Toggle, Target Board Toggle, Ref Image, PWA Install, Diagnostics & Export */}
-      <div className="flex items-center gap-1.5">
+      {/* Right Actions: Wireframe Toggle, Eye Wire/Outlines, Target Board Toggle, Ref Image, PWA Install, Diagnostics & Export */}
+      <div className="flex flex-wrap items-center gap-1.5">
         {/* Toggle Global Wireframe */}
         <button
           onClick={() => onUpdateSettings({ wireframe: !settings.wireframe })}
@@ -168,6 +203,56 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           <Grid className="w-3.5 h-3.5 text-purple-400" />
           <span className="hidden md:inline">Wireframe</span>
         </button>
+
+        {/* Toggle Eye Wireframe */}
+        <button
+          onClick={() => {
+            if (onToggleEyeWireframe) onToggleEyeWireframe();
+            else onUpdateSettings({ showEyeWireframe: !settings.showEyeWireframe });
+          }}
+          className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-medium transition-colors flex items-center gap-1 ${
+            (eyeWireframeVisible ?? settings.showEyeWireframe)
+              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500 shadow-xs'
+              : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+          title="Toggle Eye Procedural Wireframe (Sclera, Iris, Pupil)"
+        >
+          <Eye className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="hidden md:inline">Eye Wire</span>
+        </button>
+
+        {/* Toggle Eye Outlines */}
+        <button
+          onClick={() => {
+            if (onToggleEyeOutlines) onToggleEyeOutlines();
+            else onUpdateSettings({ showEyeOutlines: !settings.showEyeOutlines });
+          }}
+          className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-medium transition-colors flex items-center gap-1 ${
+            (eyeOutlinesVisible ?? settings.showEyeOutlines)
+              ? 'bg-teal-950/80 text-teal-300 border-teal-500 shadow-xs'
+              : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+          title="Toggle Eye Anatomical Outlines (Limbal Margin, Pupillary Aperture)"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+          <span className="hidden md:inline">Eye Outlines</span>
+        </button>
+
+        {/* 1-Click Toggle for Eye Outline Only (Hollow & completely see-through over picture) */}
+        {onToggleEyeOutlineOnly && (
+          <button
+            onClick={onToggleEyeOutlineOnly}
+            className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1 ${
+              (eyeOutlineOnlyVisible ?? settings.showEyeOutlineOnly)
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow-sm ring-1 ring-emerald-500/50'
+                : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+            }`}
+            title="Outline Only for Eyes: Hides solid surfaces & dense wireframes so the reference photo behind is 100% visible and easy to trace"
+          >
+            <span className="text-xs">✏️</span>
+            <span className="hidden md:inline">Outline Only</span>
+          </button>
+        )}
         {/* Toggle 3D Soccer Ball at Gaze Center Point */}
         {onToggleSoccerBall && (
           <button
@@ -216,7 +301,28 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           </button>
         )}
 
-   
+        {/* PWA Install Button */}
+        <PWAInstallButton />
+
+        {/* Diagnostics Modal Button */}
+        <button
+          onClick={onOpenDiagnostics}
+          className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60 text-xs font-medium transition-colors flex items-center gap-1"
+          title="Run Geometry & Mathematical Invariant Tests"
+        >
+          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="hidden md:inline">Tests</span>
+        </button>
+
+        {/* Export OBJ */}
+        <button
+          onClick={onExportOBJ}
+          className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center gap-1"
+          title="Export 3D Model to Wavefront .OBJ"
+        >
+          <Download className="w-3.5 h-3.5 text-sky-400" />
+          <span className="hidden md:inline">OBJ</span>
+        </button>
       </div>
     </header>
   );
