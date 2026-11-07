@@ -98,6 +98,9 @@ export class CharacterModel {
   // Per-body-part visibility & wireframe map
   partDisplayStates: Record<string, BodyPartDisplayState> = {};
 
+  // Kinematics version counter for high-performance dirty-checking
+  kinematicsVersion: number = 1;
+
   /**
    * Sets eye display preset mode
    */
@@ -263,6 +266,7 @@ export class CharacterModel {
     const rotQuat = Quaternion.fromAxisAngle(Vec3.UNIT_Y, (this.rotationDeg * Math.PI) / 180);
     const rootMat = Mat4.fromRotationTranslationScale(rotQuat, this.position);
     this.bodyData.skeleton.updateGlobalTransforms(rootMat);
+    this.kinematicsVersion++;
   }
 
   /**
@@ -299,6 +303,21 @@ export class CharacterModel {
   }
 
   /**
+   * High-performance zero-allocation deformation directly into a Float32BufferAttribute array
+   */
+  deformPartIntoBuffer(partId: string, outArray: Float32Array | number[]): boolean {
+    const part = this.bodyData.parts.find((p) => p.id === partId);
+    if (!part) return false;
+    SkinDeformer.deformIntoBuffer(
+      part.baseMeshData.vertices,
+      part.skinWeights,
+      this.bodyData.skeleton,
+      outArray
+    );
+    return true;
+  }
+
+  /**
    * Evaluates unified body mesh vertices using Linear Blend Skinning
    */
   getDeformedUnifiedVertices(): Vec3[] {
@@ -308,6 +327,20 @@ export class CharacterModel {
       this.bodyData.unifiedMesh.skinWeights,
       this.bodyData.skeleton
     );
+  }
+
+  /**
+   * High-performance zero-allocation deformation for unified mesh
+   */
+  deformUnifiedIntoBuffer(outArray: Float32Array | number[]): boolean {
+    if (!this.bodyData.unifiedMesh) return false;
+    SkinDeformer.deformIntoBuffer(
+      this.bodyData.unifiedMesh.baseMeshData.vertices,
+      this.bodyData.unifiedMesh.skinWeights,
+      this.bodyData.skeleton,
+      outArray
+    );
+    return true;
   }
 
   /**

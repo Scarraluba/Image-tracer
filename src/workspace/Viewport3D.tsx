@@ -9,6 +9,7 @@ import { CharacterModel, CharacterGazeData } from '../body/CharacterModel';
 import { ReferenceImageConfig } from '../reference/ReferenceImageModel';
 import { Camera, User, Crosshair } from 'lucide-react';
 import { FloatingCanvasControls } from '../ui/FloatingCanvasControls';
+import { TranslateArrowsWidget } from '../ui/TranslateArrowsWidget';
 
 interface Viewport3DProps {
   characters: CharacterModel[];
@@ -17,7 +18,12 @@ interface Viewport3DProps {
   referenceConfig?: ReferenceImageConfig;
   onCameraChange: (camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => void;
   onGazeEvaluated?: (data: CharacterGazeData, averageGaze?: SceneGazeAverage) => void;
+  onFpsUpdate?: (fps: number) => void;
   onSceneReady?: (scene: EyeScene) => void;
+  onUpdateCharacter?: () => void;
+  onUpdateReferenceConfig?: (config: Partial<ReferenceImageConfig>) => void;
+  onUpdateSettings?: (settings: Partial<ViewportSettings>) => void;
+  onToggleTranslateArrows?: () => void;
 }
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
@@ -27,7 +33,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   referenceConfig,
   onCameraChange,
   onGazeEvaluated,
+  onFpsUpdate,
   onSceneReady,
+  onUpdateCharacter,
+  onUpdateReferenceConfig,
+  onUpdateSettings,
+  onToggleTranslateArrows,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<EyeScene | null>(null);
@@ -38,6 +49,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const scene = new EyeScene(mountRef.current, characters, settings, {
       onCameraChange,
       onGazeEvaluated,
+      onFpsUpdate,
     });
     sceneRef.current = scene;
     if (referenceConfig) {
@@ -141,12 +153,29 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         </div>
       </div>
 
+      {/* UDLR Translate Arrows D-Pad Widget (Togglable) */}
+      <TranslateArrowsWidget
+        visible={settings.showTranslateArrows !== false}
+        onClose={onToggleTranslateArrows || (() => {})}
+        activeCharacter={characters.find((c) => c.id === activeCharacterId) || characters[0]}
+        onUpdateCharacter={onUpdateCharacter}
+        referenceConfig={referenceConfig}
+        onUpdateReferenceConfig={onUpdateReferenceConfig}
+        targetPlaneZ={settings.targetPlaneZ}
+        onUpdateSettings={onUpdateSettings}
+        onPanCamera={(dx, dy) => sceneRef.current?.panCamera(dx, dy)}
+        onZoomCamera={(factor) => sceneRef.current?.zoomCamera(factor)}
+        onResetCamera={() => sceneRef.current?.setCameraPreset('fullbody')}
+      />
+
       {/* Floating Canvas Zoom & Frame Controls (Matching IMG_0682) */}
       <FloatingCanvasControls
         onZoomIn={() => sceneRef.current?.zoomCamera(0.8)}
         onZoomOut={() => sceneRef.current?.zoomCamera(1.25)}
         onResetCamera={() => sceneRef.current?.setCameraPreset('fullbody')}
         onPresetView={handleCameraPreset}
+        showTranslateArrows={settings.showTranslateArrows !== false}
+        onToggleTranslateArrows={onToggleTranslateArrows}
       />
     </div>
   );

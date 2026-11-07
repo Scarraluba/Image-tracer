@@ -17,6 +17,8 @@ import {
   Activity,
   Layers,
   Eye,
+  Zap,
+  Move,
 } from 'lucide-react';
 
 import { SceneGazeAverage } from '../rendering/EyeScene';
@@ -38,6 +40,11 @@ interface StatusBarProps {
   onToggleEyeOutlines?: () => void;
   showEyeOutlineOnly?: boolean;
   onToggleEyeOutlineOnly?: () => void;
+  fps?: number;
+  performanceMode?: boolean;
+  onTogglePerformanceMode?: () => void;
+  showTranslateArrows?: boolean;
+  onToggleTranslateArrows?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -57,6 +64,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onToggleEyeOutlines,
   showEyeOutlineOnly = false,
   onToggleEyeOutlineOnly,
+  fps = 60,
+  performanceMode = false,
+  onTogglePerformanceMode,
+  showTranslateArrows = true,
+  onToggleTranslateArrows,
 }) => {
   // Collapsed by default on mobile screens so it never pushes or covers elements
   const [isExpanded, setIsExpanded] = useState(false);
@@ -158,6 +170,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             </button>
           )}
 
+          {/* Quick UDLR Translate Arrows Toggle Pill */}
+          {onToggleTranslateArrows && (
+            <button
+              onClick={onToggleTranslateArrows}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
+                showTranslateArrows
+                  ? 'bg-sky-950 text-sky-300 border-sky-600/80'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+              title="Toggle UDLR Translation Arrows (D-Pad)"
+            >
+              <Move className="w-3 h-3 text-sky-400" />
+              <span>{showTranslateArrows ? 'Arrows ON' : 'Arrows'}</span>
+            </button>
+          )}
+
           <span className="text-slate-600">|</span>
 
           {sceneGazeAverage && (
@@ -173,6 +201,26 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <span className="hidden sm:inline text-amber-400 font-medium">
             {geometryStats.triangles.toLocaleString()} tris
           </span>
+
+          {/* Live Real-time FPS & 1GB GPU Boost Pill */}
+          <div className="flex items-center gap-1 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+            <span className={`text-[10px] font-bold ${fps >= 50 ? 'text-emerald-400' : fps >= 30 ? 'text-amber-400' : 'text-rose-400'}`}>
+              ⚡ {fps} FPS
+            </span>
+            {onTogglePerformanceMode && (
+              <button
+                onClick={onTogglePerformanceMode}
+                className={`text-[9px] px-1.5 py-0.2 rounded font-semibold cursor-pointer border ${
+                  performanceMode
+                    ? 'bg-amber-950 text-amber-300 border-amber-600'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                }`}
+                title="Toggle Low-Spec Boost (1GB VRAM / 3.2GHz CPU)"
+              >
+                {performanceMode ? 'Boost ON' : 'Boost'}
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         /* Expanded Floating HUD Card (Does not displace viewport layout) */
@@ -181,9 +229,20 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <div className="flex items-center gap-2">
               <Activity className="w-3.5 h-3.5 text-sky-400" />
               <span className="font-bold text-slate-200">System HUD &amp; Multi-Actor Convergence</span>
-              <div className="flex items-center gap-1 text-emerald-400 font-sans font-medium text-[10px] ml-2">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Invariants Valid</span>
+              <div className="flex items-center gap-1.5 ml-2">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold border ${
+                  fps >= 50
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                    : fps >= 30
+                    ? 'bg-amber-950 text-amber-300 border-amber-800'
+                    : 'bg-rose-950 text-rose-300 border-rose-800'
+                }`}>
+                  ⚡ {fps} FPS
+                </span>
+                <div className="flex items-center gap-1 text-emerald-400 font-sans font-medium text-[10px]">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Invariants Valid</span>
+                </div>
               </div>
             </div>
 
@@ -262,6 +321,38 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                 >
                   <Grid className="w-3 h-3 text-purple-400" />
                   <span>Wire {isWireframe ? 'ON' : 'OFF'}</span>
+                </button>
+              )}
+
+              {/* Quick Low-Spec Boost Toggle */}
+              {onTogglePerformanceMode && (
+                <button
+                  onClick={onTogglePerformanceMode}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer border ${
+                    performanceMode
+                      ? 'bg-amber-950 text-amber-300 border-amber-500 shadow-sm ring-1 ring-amber-500/40'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Toggle Low-Spec Boost: Optimizes for 1GB GPU and 3.2GHz CPU (caps DPR to 1.0, reduces texture resolution & memory bandwidth, zero-allocation skinning, 60 FPS)"
+                >
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  <span>Boost {performanceMode ? 'ON (1GB)' : 'OFF'}</span>
+                </button>
+              )}
+
+              {/* Quick UDLR Translate Arrows Toggle */}
+              {onToggleTranslateArrows && (
+                <button
+                  onClick={onToggleTranslateArrows}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer border ${
+                    showTranslateArrows
+                      ? 'bg-sky-950 text-sky-300 border-sky-500 shadow-xs'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Toggle On-Screen UDLR Translation Arrows (D-Pad)"
+                >
+                  <Move className="w-3 h-3 text-sky-400" />
+                  <span>Arrows {showTranslateArrows ? 'ON' : 'OFF'}</span>
                 </button>
               )}
 

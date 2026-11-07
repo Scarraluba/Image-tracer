@@ -4,13 +4,15 @@
  */
 
 import React from 'react';
-import { ZoomIn, ZoomOut, Maximize, RotateCcw, Camera } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, RotateCcw, Camera, Move } from 'lucide-react';
 
 interface FloatingCanvasControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetCamera: () => void;
   onPresetView: (preset: 'front' | 'side' | 'fullbody' | 'perspective') => void;
+  showTranslateArrows?: boolean;
+  onToggleTranslateArrows?: () => void;
 }
 
 export const FloatingCanvasControls: React.FC<FloatingCanvasControlsProps> = ({
@@ -18,11 +20,29 @@ export const FloatingCanvasControls: React.FC<FloatingCanvasControlsProps> = ({
   onZoomOut,
   onResetCamera,
   onPresetView,
+  showTranslateArrows = false,
+  onToggleTranslateArrows,
 }) => {
   return (
     <div className="absolute bottom-6 right-4 flex flex-col gap-2 z-10 select-none">
-      {/* Zoom Widget (matching IMG_0682 zoom pill) */}
+      {/* Zoom & Translate Arrows Widget (matching IMG_0682 zoom pill) */}
       <div className="flex flex-col bg-slate-900/90 border border-slate-800 rounded-xl p-1 shadow-2xl backdrop-blur-xs text-slate-300">
+        {onToggleTranslateArrows && (
+          <>
+            <button
+              onClick={onToggleTranslateArrows}
+              className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${
+                showTranslateArrows
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Toggle UDLR Translation Arrows (D-Pad)"
+            >
+              <Move className="w-4 h-4" />
+            </button>
+            <div className="h-px bg-slate-800 mx-1" />
+          </>
+        )}
         <button
           onClick={onZoomIn}
           className="p-2.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"

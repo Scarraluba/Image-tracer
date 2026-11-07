@@ -65,6 +65,7 @@ export default function App() {
     showEyeOutlines: false,
     showEyeOutlineOnly: false,
     eyeSolidOpacity: 1.0,
+    showTranslateArrows: true,
   });
 
   const [referenceConfig, setReferenceConfig] = useState<ReferenceImageConfig>(DEFAULT_REFERENCE_IMAGE);
@@ -87,6 +88,7 @@ export default function App() {
     elevationDeg: 12.0,
   });
   const [geometryStats, setGeometryStats] = useState({ vertices: 3400, triangles: 6200 });
+  const [fps, setFps] = useState<number>(60);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [, setRenderTrigger] = useState(0);
 
@@ -204,6 +206,34 @@ export default function App() {
         ...prev,
         showEyeOutlineOnly: nextVal,
         showEyeOutlines: nextVal ? true : prev.showEyeOutlines,
+      };
+      if (sceneRef.current) {
+        sceneRef.current.updateSettings(updated);
+      }
+      return updated;
+    });
+  }, []);
+
+  // 1-Click Toggle for Low-Spec / 1GB GPU Performance Boost Mode
+  const handleTogglePerformanceMode = useCallback(() => {
+    setSettings((prev) => {
+      const updated: ViewportSettings = {
+        ...prev,
+        performanceMode: !prev.performanceMode,
+      };
+      if (sceneRef.current) {
+        sceneRef.current.updateSettings(updated);
+      }
+      return updated;
+    });
+  }, []);
+
+  // 1-Click Toggle for UDLR Translation Arrows Widget
+  const handleToggleTranslateArrows = useCallback(() => {
+    setSettings((prev) => {
+      const updated: ViewportSettings = {
+        ...prev,
+        showTranslateArrows: prev.showTranslateArrows === false ? true : false,
       };
       if (sceneRef.current) {
         sceneRef.current.updateSettings(updated);
@@ -475,6 +505,10 @@ export default function App() {
         eyeOutlinesVisible={settings.showEyeOutlines || false}
         onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
         eyeOutlineOnlyVisible={settings.showEyeOutlineOnly || false}
+        onTogglePerformanceMode={handleTogglePerformanceMode}
+        performanceMode={settings.performanceMode || false}
+        onToggleTranslateArrows={handleToggleTranslateArrows}
+        translateArrowsVisible={settings.showTranslateArrows !== false}
       />
 
       {/* Main Workspace with Dynamic Responsive Layout */}
@@ -491,7 +525,12 @@ export default function App() {
                 referenceConfig={referenceConfig}
                 onCameraChange={handleCameraChange}
                 onGazeEvaluated={handleGazeEvaluated}
+                onFpsUpdate={setFps}
                 onSceneReady={handleSceneReady}
+                onUpdateCharacter={forceSceneUpdate}
+                onUpdateReferenceConfig={handleUpdateReferenceConfig}
+                onUpdateSettings={handleUpdateSettings}
+                onToggleTranslateArrows={handleToggleTranslateArrows}
               />
               {/* Reference Image Overlay on Viewport */}
               <ReferenceImageOverlay
@@ -555,6 +594,8 @@ export default function App() {
                   onFocusEyesStraight={handleFocusEyesStraight}
                   onFocusEyesOnCamera={handleFocusEyesOnCamera}
                   onFocusEyesOnTarget={handleFocusEyesOnTarget}
+                  showTranslateArrows={settings.showTranslateArrows !== false}
+                  onToggleTranslateArrows={handleToggleTranslateArrows}
                 />
               </div>
             </div>
@@ -571,7 +612,12 @@ export default function App() {
               referenceConfig={referenceConfig}
               onCameraChange={handleCameraChange}
               onGazeEvaluated={handleGazeEvaluated}
+              onFpsUpdate={setFps}
               onSceneReady={handleSceneReady}
+              onUpdateCharacter={forceSceneUpdate}
+              onUpdateReferenceConfig={handleUpdateReferenceConfig}
+              onUpdateSettings={handleUpdateSettings}
+              onToggleTranslateArrows={handleToggleTranslateArrows}
             />
 
             {/* Reference Image Overlay on Viewport */}
@@ -612,6 +658,8 @@ export default function App() {
                 onFocusEyesStraight={handleFocusEyesStraight}
                 onFocusEyesOnCamera={handleFocusEyesOnCamera}
                 onFocusEyesOnTarget={handleFocusEyesOnTarget}
+                showTranslateArrows={settings.showTranslateArrows !== false}
+                onToggleTranslateArrows={handleToggleTranslateArrows}
               />
             </MobileDrawer>
           </div>
@@ -670,6 +718,8 @@ export default function App() {
                 onFocusEyesStraight={handleFocusEyesStraight}
                 onFocusEyesOnCamera={handleFocusEyesOnCamera}
                 onFocusEyesOnTarget={handleFocusEyesOnTarget}
+                showTranslateArrows={settings.showTranslateArrows !== false}
+                onToggleTranslateArrows={handleToggleTranslateArrows}
               />
             </div>
           </div>
@@ -693,6 +743,11 @@ export default function App() {
           onToggleEyeOutlines={handleToggleEyeOutlines}
           showEyeOutlineOnly={settings.showEyeOutlineOnly}
           onToggleEyeOutlineOnly={handleToggleEyeOutlineOnly}
+          fps={fps}
+          performanceMode={settings.performanceMode || false}
+          onTogglePerformanceMode={handleTogglePerformanceMode}
+          showTranslateArrows={settings.showTranslateArrows !== false}
+          onToggleTranslateArrows={handleToggleTranslateArrows}
         />
       </div>
 

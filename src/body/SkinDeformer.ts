@@ -137,4 +137,44 @@ export class SkinDeformer {
 
     return deformed;
   }
+
+  /**
+   * High-performance zero-allocation Linear Blend Skinning:
+   * Writes deformed coordinates directly into a target Float32Array
+   * without creating temporary Vec3 objects or causing GC pauses.
+   */
+  static deformIntoBuffer(
+    baseVertices: readonly Vec3[],
+    skinWeights: readonly VertexSkinWeight[],
+    skeleton: Skeleton,
+    outArray: Float32Array | number[]
+  ): void {
+    for (let i = 0; i < baseVertices.length; i++) {
+      const p = baseVertices[i];
+      const sw = skinWeights[i];
+
+      let accX = 0;
+      let accY = 0;
+      let accZ = 0;
+
+      for (let k = 0; k < sw.boneIds.length; k++) {
+        const boneId = sw.boneIds[k];
+        const w = sw.weights[k];
+        if (w <= 0.0001) continue;
+
+        const joint = skeleton.getJoint(boneId);
+        if (!joint) continue;
+
+        const pTransformed = joint.skinningMatrix.transformPoint(p);
+        accX += pTransformed.x * w;
+        accY += pTransformed.y * w;
+        accZ += pTransformed.z * w;
+      }
+
+      const idx = i * 3;
+      outArray[idx] = accX;
+      outArray[idx + 1] = accY;
+      outArray[idx + 2] = accZ;
+    }
+  }
 }

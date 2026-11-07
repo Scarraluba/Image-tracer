@@ -27,6 +27,9 @@ export interface ViewportSettings {
   showEyeOutlines?: boolean;
   showEyeOutlineOnly?: boolean; // When true, eyes are rendered as outlines only (solid is hidden / see-through)
   eyeSolidOpacity?: number; // 0.0 (fully transparent/hollow) to 1.0 (fully solid)
+  performanceMode?: boolean; // 1-Click High-FPS / Low-Spec GPU optimization mode (1GB VRAM & 3.2GHz CPU friendly)
+  targetFps?: number; // 30, 60
+  showTranslateArrows?: boolean; // Togglable visibility for on-screen Up/Down/Left/Right translate arrows widget
 }
 
 export interface EyeRenderNodes {
@@ -70,6 +73,7 @@ export class EyeScene {
   private targetPlaneMesh?: THREE.Mesh;
   private targetPlaneCanvas?: HTMLCanvasElement;
   private targetPlaneTexture?: THREE.CanvasTexture;
+  private lastTargetPlaneState?: string;
 
   // 3D Reference Image Plane (Fixed in world space)
   private currentRefConfig?: ReferenceImageConfig;
@@ -89,10 +93,16 @@ export class EyeScene {
       unifiedMesh?: THREE.Mesh;
       jointSpheres: Map<string, THREE.Mesh>;
       boneLines?: THREE.LineSegments;
+      bonePositionsArray?: Float32Array;
       leftEyeGroup: THREE.Group;
       rightEyeGroup: THREE.Group;
       leftEye: EyeRenderNodes;
       rightEye: EyeRenderNodes;
+      leftGazeCylinder?: THREE.Mesh;
+      leftGazeCone?: THREE.Mesh;
+      rightGazeCylinder?: THREE.Mesh;
+      rightGazeCone?: THREE.Mesh;
+      lastKinematicsVersion?: number;
     }
   > = new Map();
 
@@ -105,6 +115,13 @@ export class EyeScene {
   private currentSettings: ViewportSettings;
   private onCameraChange?: (camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => void;
   private onGazeEvaluated?: (data: CharacterGazeData, averageGaze?: SceneGazeAverage) => void;
+  private onFpsUpdate?: (fps: number) => void;
+
+  // Frame timing and real-time FPS calculation
+  private frameCount: number = 0;
+  private lastFpsTime: number = performance.now();
+  private currentFps: number = 60;
+  private lastRenderTime: number = 0;
 
   constructor(
     container: HTMLElement,
@@ -113,6 +130,7 @@ export class EyeScene {
     callbacks?: {
       onCameraChange?: (camInfo: { distance: number; azimuthDeg: number; elevationDeg: number }) => void;
       onGazeEvaluated?: (data: CharacterGazeData, averageGaze?: SceneGazeAverage) => void;
+      onFpsUpdate?: (fps: number) => void;
     }
   ) {
     this.container = container;
@@ -121,6 +139,7 @@ export class EyeScene {
     this.currentSettings = initialSettings;
     this.onCameraChange = callbacks?.onCameraChange;
     this.onGazeEvaluated = callbacks?.onGazeEvaluated;
+    this.onFpsUpdate = callbacks?.onFpsUpdate;
 
     // 1. Detect Software WebGL
     this.isSoftwareGl = (() => {
@@ -138,16 +157,20 @@ export class EyeScene {
       }
     })();
 
-    // 2. Initialize Three.js WebGLRenderer
+    // 2. Initialize Three.js WebGLRenderer with low-spec optimization
+    const isPerf = !!this.currentSettings.performanceMode;
+    const initialPixelRatio = (this.isSoftwareGl || isPerf) ? 1.0 : Math.min(window.devicePixelRatio, 1.25);
+
     this.renderer = new THREE.WebGLRenderer({
-      antialias: !this.isSoftwareGl,
+      antialias: !this.isSoftwareGl && !isPerf,
       powerPreference: 'high-performance',
       alpha: false,
+      precision: (this.isSoftwareGl || isPerf) ? 'mediump' : 'highp',
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMapping = isPerf ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(initialPixelRatio);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setClearColor(0x0a0f1d, 1.0);
     container.appendChild(this.renderer.domElement);
@@ -297,8 +320,23 @@ export class EyeScene {
     }
     this.targetPlaneGroup.position.set(posX, posY, posZ);
 
-    // Draw high-resolution calibrated pixel grid
-    const ctx = this.targetPlaneCanvas.getContext('2d')!;
+    const isPerf = !!this.currentSettings.performanceMode;
+    const stateKey = `${widthPx}_${heightPx}_${worldWidth.toFixed(1)}_${worldHeight.toFixed(1)}_${posZ.toFixed(1)}_${isPerf}`;
+    if (this.lastTargetPlaneState === stateKey) {
+      return;
+    }
+    this.lastTargetPlaneState = stateKey;
+
+    // In performance mode, use 512x512 canvas for 4x lower memory bandwidth & faster draw
+    const targetDim = isPerf ? 512 : 1024;
+    if (this.targetPlaneCanvas.width !== targetDim) {
+      this.targetPlaneCanvas.width = targetDim;
+      this.targetPlaneCanvas.height = targetDim;
+    }
+
+    // Draw calibrated pixel grid
+    const ctx = this.targetPlaneCanvas.getContext('2d');
+    if (!ctx) return;
     const w = this.targetPlaneCanvas.width;
     const h = this.targetPlaneCanvas.height;
 
@@ -310,8 +348,8 @@ export class EyeScene {
 
     // Outer border
     ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(6, 6, w - 12, h - 12);
+    ctx.lineWidth = isPerf ? 3 : 6;
+    ctx.strokeRect(4, 4, w - 8, h - 8);
 
     // Grid subdivision lines (8x8 divisions)
     ctx.lineWidth = 1;
@@ -331,7 +369,7 @@ export class EyeScene {
     }
 
     // Main Center Crosshairs
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
     ctx.beginPath();
     ctx.moveTo(w / 2, 0);
@@ -341,41 +379,44 @@ export class EyeScene {
     ctx.stroke();
 
     // Concentric calibration rings
-    for (let r = 80; r <= 420; r += 80) {
+    const ringStep = isPerf ? 80 : 80;
+    const maxR = isPerf ? 210 : 420;
+    for (let r = ringStep; r <= maxR; r += ringStep) {
       ctx.beginPath();
       ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
-      ctx.strokeStyle = r % 160 === 0 ? 'rgba(56, 189, 248, 0.5)' : 'rgba(56, 189, 248, 0.25)';
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
       ctx.stroke();
     }
 
     // Header info: Exact Pixel dimensions matched to reference picture
+    const fontScale = isPerf ? 0.6 : 1.0;
     ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 26px monospace';
-    ctx.fillText('TARGET AREA [MATCHED TO REF PHOTO]', 28, 44);
+    ctx.font = `bold ${Math.round(24 * fontScale)}px monospace`;
+    ctx.fillText('TARGET AREA [MATCHED TO REF PHOTO]', 20 * fontScale, 36 * fontScale);
 
     ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 22px monospace';
-    ctx.fillText(`PIXEL DIMENSIONS: ${widthPx} × ${heightPx} px`, 28, 76);
+    ctx.font = `bold ${Math.round(20 * fontScale)}px monospace`;
+    ctx.fillText(`PIXELS: ${widthPx} × ${heightPx} px`, 20 * fontScale, 64 * fontScale);
 
     ctx.fillStyle = '#94a3b8';
-    ctx.font = '18px monospace';
-    ctx.fillText(`WORLD: ${worldWidth.toFixed(1)}u × ${worldHeight.toFixed(1)}u | Z = ${posZ.toFixed(1)}u`, 28, 104);
+    ctx.font = `${Math.round(16 * fontScale)}px monospace`;
+    ctx.fillText(`WORLD: ${worldWidth.toFixed(1)}u × ${worldHeight.toFixed(1)}u | Z = ${posZ.toFixed(1)}u`, 20 * fontScale, 88 * fontScale);
 
     // Corner Pixel coordinate labels (standard top-left 0,0)
     ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 20px monospace';
-    ctx.fillText('(0, 0) px', 24, 136);
+    ctx.font = `bold ${Math.round(18 * fontScale)}px monospace`;
+    ctx.fillText('(0, 0) px', 18 * fontScale, 116 * fontScale);
     ctx.textAlign = 'right';
-    ctx.fillText(`(${widthPx}, 0) px`, w - 24, 136);
-    ctx.fillText(`(${widthPx}, ${heightPx}) px`, w - 24, h - 28);
+    ctx.fillText(`(${widthPx}, 0) px`, w - 18 * fontScale, 116 * fontScale);
+    ctx.fillText(`(${widthPx}, ${heightPx}) px`, w - 18 * fontScale, h - 20 * fontScale);
     ctx.textAlign = 'left';
-    ctx.fillText(`(0, ${heightPx}) px`, 24, h - 28);
+    ctx.fillText(`(0, ${heightPx}) px`, 18 * fontScale, h - 20 * fontScale);
 
     // Center coordinate label
     ctx.fillStyle = '#facc15';
-    ctx.font = 'bold 18px monospace';
+    ctx.font = `bold ${Math.round(16 * fontScale)}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(`CENTER (${Math.round(widthPx / 2)}, ${Math.round(heightPx / 2)}) px`, w / 2, h / 2 - 12);
+    ctx.fillText(`CENTER (${Math.round(widthPx / 2)}, ${Math.round(heightPx / 2)}) px`, w / 2, h / 2 - 10 * fontScale);
     ctx.textAlign = 'left';
 
     this.targetPlaneTexture.needsUpdate = true;
@@ -615,6 +656,41 @@ export class EyeScene {
     charGroup.add(leftEye.group);
     charGroup.add(rightEye.group);
 
+    // Persistent bone lines buffer (up to 60 bones = 120 points = 360 floats)
+    const bonePositionsArray = new Float32Array(360);
+    const boneGeom = new THREE.BufferGeometry();
+    boneGeom.setAttribute('position', new THREE.BufferAttribute(bonePositionsArray, 3));
+    const boneMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
+    const boneLines = new THREE.LineSegments(boneGeom, boneMat);
+    skeletonGroup.add(boneLines);
+
+    // Persistent gaze ray cylinders & cones (zero allocation per frame)
+    const rayLen = 50.0;
+    const makeGazeCylinder = (colorHex: number) => {
+      const geom = new THREE.CylinderGeometry(0.18, 0.18, rayLen, 6);
+      geom.translate(0, rayLen / 2, 0);
+      geom.rotateX(Math.PI / 2);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.visible = false;
+      return mesh;
+    };
+    const makeGazeCone = (colorHex: number) => {
+      const geom = new THREE.ConeGeometry(0.7, 2.2, 8);
+      geom.translate(0, 1.1, 0);
+      geom.rotateX(Math.PI / 2);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.visible = false;
+      return mesh;
+    };
+
+    const leftGazeCylinder = makeGazeCylinder(0x22c55e);
+    const leftGazeCone = makeGazeCone(0x22c55e);
+    const rightGazeCylinder = makeGazeCylinder(0x06b6d4);
+    const rightGazeCone = makeGazeCone(0x06b6d4);
+    gazeGroup.add(leftGazeCylinder, leftGazeCone, rightGazeCylinder, rightGazeCone);
+
     this.characterNodes.set(char.id, {
       group: charGroup,
       skeletonGroup,
@@ -622,10 +698,17 @@ export class EyeScene {
       partMeshes,
       unifiedMesh,
       jointSpheres,
+      boneLines,
+      bonePositionsArray,
       leftEyeGroup: leftEye.group,
       rightEyeGroup: rightEye.group,
       leftEye,
       rightEye,
+      leftGazeCylinder,
+      leftGazeCone,
+      rightGazeCylinder,
+      rightGazeCone,
+      lastKinematicsVersion: -1,
     });
   }
 
@@ -668,6 +751,8 @@ export class EyeScene {
       oppositeScaleFactor: this.currentRefConfig?.oppositeScaleFactor || 1.0,
     };
 
+    const isPerf = !!this.currentSettings.performanceMode;
+
     for (const char of this.characters) {
       const node = this.characterNodes.get(char.id);
       if (!node) continue;
@@ -687,33 +772,36 @@ export class EyeScene {
         }
       }
 
-      // 2. Deform Vertices using Linear Blend Skinning
-      if (char.isUnifiedMode && node.unifiedMesh) {
-        const deformedVerts = char.getDeformedUnifiedVertices();
-        const posAttr = node.unifiedMesh.geometry.attributes.position as THREE.BufferAttribute;
-        for (let i = 0; i < deformedVerts.length; i++) {
-          posAttr.setXYZ(i, deformedVerts[i].x, deformedVerts[i].y, deformedVerts[i].z);
-        }
-        posAttr.needsUpdate = true;
-        node.unifiedMesh.geometry.computeVertexNormals();
-      } else {
-        for (const part of char.bodyData.parts) {
-          const mesh = node.partMeshes.get(part.id);
-          if (!mesh) continue;
-          const deformedVerts = char.getDeformedPartVertices(part.id);
-          const posAttr = mesh.geometry.attributes.position as THREE.BufferAttribute;
-          for (let i = 0; i < deformedVerts.length; i++) {
-            posAttr.setXYZ(i, deformedVerts[i].x, deformedVerts[i].y, deformedVerts[i].z);
-          }
+      // 2. Deform Vertices using zero-allocation Linear Blend Skinning (with dirty flag)
+      const isKinematicsDirty = node.lastKinematicsVersion !== char.kinematicsVersion;
+      if (isKinematicsDirty) {
+        if (char.isUnifiedMode && node.unifiedMesh) {
+          const posAttr = node.unifiedMesh.geometry.attributes.position as THREE.BufferAttribute;
+          char.deformUnifiedIntoBuffer(posAttr.array as Float32Array);
           posAttr.needsUpdate = true;
-          mesh.geometry.computeVertexNormals();
+          if (!isPerf) {
+            node.unifiedMesh.geometry.computeVertexNormals();
+          }
+        } else {
+          for (const part of char.bodyData.parts) {
+            const mesh = node.partMeshes.get(part.id);
+            if (!mesh) continue;
+            const posAttr = mesh.geometry.attributes.position as THREE.BufferAttribute;
+            char.deformPartIntoBuffer(part.id, posAttr.array as Float32Array);
+            posAttr.needsUpdate = true;
+            if (!isPerf) {
+              mesh.geometry.computeVertexNormals();
+            }
+          }
         }
+        node.lastKinematicsVersion = char.kinematicsVersion;
       }
 
       // 3. Update Skeleton Bone Lines & Joint Markers
       node.skeletonGroup.visible = char.showSkeleton;
       if (char.showSkeleton) {
-        const bonePositions: number[] = [];
+        const bonePositions = node.bonePositionsArray || new Float32Array(360);
+        let floatIdx = 0;
 
         for (const joint of char.bodyData.skeleton.joints.values()) {
           const sphere = node.jointSpheres.get(joint.id);
@@ -731,31 +819,25 @@ export class EyeScene {
             sphere.scale.setScalar(isSelected ? 1.6 : 1.0);
           }
 
-          if (joint.parentId) {
+          if (joint.parentId && floatIdx + 6 <= bonePositions.length) {
             const parent = char.bodyData.skeleton.getJoint(joint.parentId);
             if (parent) {
-              bonePositions.push(
-                parent.currentWorldPosition.x,
-                parent.currentWorldPosition.y,
-                parent.currentWorldPosition.z,
-                joint.currentWorldPosition.x,
-                joint.currentWorldPosition.y,
-                joint.currentWorldPosition.z
-              );
+              bonePositions[floatIdx++] = parent.currentWorldPosition.x;
+              bonePositions[floatIdx++] = parent.currentWorldPosition.y;
+              bonePositions[floatIdx++] = parent.currentWorldPosition.z;
+              bonePositions[floatIdx++] = joint.currentWorldPosition.x;
+              bonePositions[floatIdx++] = joint.currentWorldPosition.y;
+              bonePositions[floatIdx++] = joint.currentWorldPosition.z;
             }
           }
         }
 
-        // Recreate bone lines
+        // Update pre-allocated bone lines buffer
         if (node.boneLines) {
-          node.skeletonGroup.remove(node.boneLines);
-          node.boneLines.geometry.dispose();
+          const posAttr = node.boneLines.geometry.attributes.position as THREE.BufferAttribute;
+          posAttr.needsUpdate = true;
+          node.boneLines.geometry.setDrawRange(0, floatIdx / 3);
         }
-        const lineGeom = new THREE.BufferGeometry();
-        lineGeom.setAttribute('position', new THREE.Float32BufferAttribute(bonePositions, 3));
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
-        node.boneLines = new THREE.LineSegments(lineGeom, lineMat);
-        node.skeletonGroup.add(node.boneLines);
       }
 
       // 4. Update Procedural Eyes position & rotation (with independent pupil offset/decoupling)
@@ -897,43 +979,40 @@ export class EyeScene {
         allGazeHits.push(new THREE.Vector3(rO.x + rD.x * tZ, rO.y + rD.y * tZ, posZ));
       }
 
-      // Clear old ray visual elements
-      while (node.gazeGroup.children.length > 0) {
-        const child = node.gazeGroup.children[0] as THREE.Mesh;
-        node.gazeGroup.remove(child);
-        if (child.geometry) child.geometry.dispose();
-      }
-
+      // 6. Update pre-allocated gaze ray meshes (zero geometry churn)
       if (char.showGazeRays) {
         const rayLen = 50.0;
-
-        const addGazeRay = (origin: THREE.Vector3, dir: THREE.Vector3, colorHex: number) => {
-          const rayGeom = new THREE.CylinderGeometry(0.18, 0.18, rayLen, 8);
-          rayGeom.translate(0, rayLen / 2, 0);
-          rayGeom.rotateX(Math.PI / 2);
-          const rayMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 });
-          const rayMesh = new THREE.Mesh(rayGeom, rayMat);
-          rayMesh.position.copy(origin);
-          rayMesh.lookAt(origin.clone().add(dir));
-          node.gazeGroup.add(rayMesh);
-
-          const coneGeom = new THREE.ConeGeometry(0.7, 2.2, 12);
-          coneGeom.translate(0, 1.1, 0);
-          coneGeom.rotateX(Math.PI / 2);
-          const tip = origin.clone().add(dir.clone().multiplyScalar(rayLen));
-          const coneMesh = new THREE.Mesh(coneGeom, rayMat);
-          coneMesh.position.copy(tip);
-          coneMesh.lookAt(tip.clone().add(dir));
-          node.gazeGroup.add(coneMesh);
-        };
-
         const leftO = new THREE.Vector3(gazeAnalysis.leftEyeCenterWorld.x, gazeAnalysis.leftEyeCenterWorld.y, gazeAnalysis.leftEyeCenterWorld.z);
         const leftD = new THREE.Vector3(gazeAnalysis.leftGazeDirectionWorld.x, gazeAnalysis.leftGazeDirectionWorld.y, gazeAnalysis.leftGazeDirectionWorld.z);
-        addGazeRay(leftO, leftD, 0x22c55e);
+
+        if (node.leftGazeCylinder && node.leftGazeCone) {
+          node.leftGazeCylinder.visible = true;
+          node.leftGazeCone.visible = true;
+          node.leftGazeCylinder.position.copy(leftO);
+          node.leftGazeCylinder.lookAt(leftO.clone().add(leftD));
+          const leftTip = leftO.clone().add(leftD.clone().multiplyScalar(rayLen));
+          node.leftGazeCone.position.copy(leftTip);
+          node.leftGazeCone.lookAt(leftTip.clone().add(leftD));
+        }
 
         const rightO = new THREE.Vector3(gazeAnalysis.rightEyeCenterWorld.x, gazeAnalysis.rightEyeCenterWorld.y, gazeAnalysis.rightEyeCenterWorld.z);
         const rightD = new THREE.Vector3(gazeAnalysis.rightGazeDirectionWorld.x, gazeAnalysis.rightGazeDirectionWorld.y, gazeAnalysis.rightGazeDirectionWorld.z);
-        addGazeRay(rightO, rightD, 0x06b6d4);
+
+        if (node.rightGazeCylinder && node.rightGazeCone) {
+          node.rightGazeCylinder.visible = true;
+          node.rightGazeCone.visible = true;
+          node.rightGazeCylinder.position.copy(rightO);
+          node.rightGazeCylinder.lookAt(rightO.clone().add(rightD));
+          const rightTip = rightO.clone().add(rightD.clone().multiplyScalar(rayLen));
+          node.rightGazeCone.position.copy(rightTip);
+          node.rightGazeCone.lookAt(rightTip.clone().add(rightD));
+        }
+      } else {
+        if (node.leftGazeCylinder) node.leftGazeCylinder.visible = false;
+        if (node.leftGazeCone) node.leftGazeCone.visible = false;
+        if (node.rightGazeCylinder) node.rightGazeCylinder.visible = false;
+        if (node.rightGazeCone) node.rightGazeCone.visible = false;
+      }
 
         // Update target plane dots for the active character
         if (char.id === this.activeCharacterId) {
@@ -949,7 +1028,6 @@ export class EyeScene {
           }
         }
       }
-    }
 
     // 6. Compute Multi-Character Averaged Gaze Center Point
     let avgCenter = new Vec3(posX, posY, posZ);
@@ -1040,6 +1118,14 @@ export class EyeScene {
   }
 
   public applyViewportSettings(): void {
+    const isPerf = !!this.currentSettings.performanceMode;
+    const targetPixelRatio = (this.isSoftwareGl || isPerf) ? 1.0 : Math.min(window.devicePixelRatio, 1.25);
+    if (this.renderer.getPixelRatio() !== targetPixelRatio) {
+      this.renderer.setPixelRatio(targetPixelRatio);
+      this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    }
+    this.renderer.toneMapping = isPerf ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+
     this.axesGroup.visible = this.currentSettings.showAxes;
     this.gridHelper.visible = this.currentSettings.showGrid;
     this.targetPlaneGroup.visible = this.currentSettings.showTargetPlane;
@@ -1208,6 +1294,19 @@ export class EyeScene {
     this.notifyCameraChange();
   }
 
+  public panCamera(deltaX: number, deltaY: number): void {
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    const right = new THREE.Vector3().crossVectors(forward, this.camera.up).normalize();
+    const up = new THREE.Vector3().copy(this.camera.up).normalize();
+
+    const move = right.multiplyScalar(deltaX).add(up.multiplyScalar(deltaY));
+    this.camera.position.add(move);
+    this.controls.target.add(move);
+    this.controls.update();
+    this.notifyCameraChange();
+  }
+
   private notifyCameraChange(): void {
     if (!this.onCameraChange) return;
     const offset = this.camera.position.clone().sub(this.controls.target);
@@ -1253,6 +1352,32 @@ export class EyeScene {
   private startLoop(): void {
     const tick = () => {
       if (this.isDisposed) return;
+
+      const now = performance.now();
+
+      // Real-time FPS computation
+      this.frameCount++;
+      if (now - this.lastFpsTime >= 1000) {
+        this.currentFps = Math.round((this.frameCount * 1000) / (now - this.lastFpsTime));
+        this.frameCount = 0;
+        this.lastFpsTime = now;
+        if (this.onFpsUpdate) {
+          this.onFpsUpdate(this.currentFps);
+        }
+      }
+
+      // Frame rate pacing if targetFps specified (e.g. 30 / 60)
+      const targetFps = this.currentSettings.targetFps;
+      if (targetFps && targetFps > 0) {
+        const interval = 1000 / targetFps;
+        const elapsed = now - this.lastRenderTime;
+        if (elapsed < interval - 1.5) {
+          this.animFrameId = requestAnimationFrame(tick);
+          return;
+        }
+        this.lastRenderTime = now - (elapsed % interval);
+      }
+
       this.controls.update();
       if (this.soccerBallGroup && this.soccerBallGroup.visible) {
         // Subtle slow spin for 3D realism

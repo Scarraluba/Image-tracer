@@ -24,6 +24,8 @@ import {
   ImageIcon,
   FolderOpen,
   Target,
+  Zap,
+  Move,
 } from 'lucide-react';
 import { ViewportSettings } from '../rendering/EyeScene';
 import { CharacterModel } from '../body/CharacterModel';
@@ -59,6 +61,10 @@ interface TopToolbarProps {
   eyeOutlinesVisible?: boolean;
   onToggleEyeOutlineOnly?: () => void;
   eyeOutlineOnlyVisible?: boolean;
+  onTogglePerformanceMode?: () => void;
+  performanceMode?: boolean;
+  onToggleTranslateArrows?: () => void;
+  translateArrowsVisible?: boolean;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -89,6 +95,10 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   eyeOutlinesVisible,
   onToggleEyeOutlineOnly,
   eyeOutlineOnlyVisible,
+  onTogglePerformanceMode,
+  performanceMode,
+  onToggleTranslateArrows,
+  translateArrowsVisible,
 }) => {
   const activeChar = characters.find((c) => c.id === activeCharacterId);
 
@@ -300,6 +310,40 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             <span className="hidden md:inline">Ref Image</span>
           </button>
         )}
+
+        {/* Toggle UDLR Translate Arrows (D-Pad) */}
+        <button
+          onClick={() => {
+            if (onToggleTranslateArrows) onToggleTranslateArrows();
+            else onUpdateSettings({ showTranslateArrows: !settings.showTranslateArrows });
+          }}
+          className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1 ${
+            (translateArrowsVisible ?? settings.showTranslateArrows !== false)
+              ? 'bg-sky-950/90 text-sky-300 border-sky-500 shadow-xs ring-1 ring-sky-500/40'
+              : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+          title="Toggle On-Screen UDLR Translation Arrows (Up, Down, Left, Right D-Pad Widget)"
+        >
+          <Move className="w-3.5 h-3.5 text-sky-400" />
+          <span className="hidden md:inline">{(translateArrowsVisible ?? settings.showTranslateArrows !== false) ? 'Arrows ON' : 'Arrows'}</span>
+        </button>
+
+        {/* Low-Spec / 1GB GPU Performance Boost Toggle */}
+        <button
+          onClick={() => {
+            if (onTogglePerformanceMode) onTogglePerformanceMode();
+            else onUpdateSettings({ performanceMode: !settings.performanceMode });
+          }}
+          className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1 ${
+            (performanceMode ?? settings.performanceMode)
+              ? 'bg-amber-950/90 text-amber-300 border-amber-500 shadow-sm ring-1 ring-amber-500/40'
+              : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+          title="Toggle Low-Spec Boost: Optimizes for 1GB GPU and 3.2GHz CPU (caps DPR to 1.0, reduces texture resolution & memory bandwidth, zero-allocation skinning, 60 FPS)"
+        >
+          <Zap className="w-3.5 h-3.5 text-amber-400" />
+          <span className="hidden md:inline">{(performanceMode ?? settings.performanceMode) ? 'Low-Spec Boost ON' : 'Boost (1GB)'}</span>
+        </button>
 
         {/* PWA Install Button */}
         <PWAInstallButton />

@@ -23,8 +23,8 @@ export class SoccerBallGenerator {
       return this.cachedTexture;
     }
 
-    const width = 1024;
-    const height = 512;
+    const width = 256;
+    const height = 128;
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -70,25 +70,23 @@ export class SoccerBallGenerator {
         const vy = sinLat;
         const vz = cosLat * Math.cos(lon);
 
-        // Find distance to closest icosahedron vertex (pentagon center)
-        let minDist = 10.0;
-        let secondMinDist = 10.0;
+        // Find closest vertices using fast dot product (max dot = min angular distance)
+        let maxDot1 = -2.0;
+        let maxDot2 = -2.0;
 
         for (let i = 0; i < pentagonCenters.length; i++) {
           const pc = pentagonCenters[i];
-          // Dot product = cos(angular distance)
-          const dot = Math.max(-1, Math.min(1, vx * pc.x + vy * pc.y + vz * pc.z));
-          const angDist = Math.acos(dot);
-
-          if (angDist < minDist) {
-            secondMinDist = minDist;
-            minDist = angDist;
-          } else if (angDist < secondMinDist) {
-            secondMinDist = angDist;
+          const dot = vx * pc.x + vy * pc.y + vz * pc.z;
+          if (dot > maxDot1) {
+            maxDot2 = maxDot1;
+            maxDot1 = dot;
+          } else if (dot > maxDot2) {
+            maxDot2 = dot;
           }
         }
 
-        // Distance to the boundary between neighboring pentagon zones (hexagon seam)
+        const minDist = Math.acos(Math.max(-1, Math.min(1, maxDot1)));
+        const secondMinDist = Math.acos(Math.max(-1, Math.min(1, maxDot2)));
         const hexSeamDist = Math.abs(secondMinDist - minDist);
 
         const pixelIndex = (y * width + x) * 4;

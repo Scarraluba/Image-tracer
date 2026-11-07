@@ -56,6 +56,8 @@ interface SelectedPanelContentProps {
   onFocusEyesStraight?: () => void;
   onFocusEyesOnCamera?: () => void;
   onFocusEyesOnTarget?: () => void;
+  showTranslateArrows?: boolean;
+  onToggleTranslateArrows?: () => void;
 }
 
 export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
@@ -83,6 +85,8 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
   onFocusEyesStraight,
   onFocusEyesOnCamera,
   onFocusEyesOnTarget,
+  showTranslateArrows = true,
+  onToggleTranslateArrows,
 }) => {
   const [syncEyes, setSyncEyes] = useState(true);
   const selectedJoint = character.bodyData.skeleton.getJoint(character.selectedJointId);
@@ -1339,9 +1343,25 @@ export const SelectedPanelContent: React.FC<SelectedPanelContentProps> = ({
 
           {/* Actor Ground Placement & Elevation */}
           <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
-              Placement & Elevation (Y ≥ 0)
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                Placement & Elevation (Y ≥ 0)
+              </span>
+              {onToggleTranslateArrows && (
+                <button
+                  onClick={onToggleTranslateArrows}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
+                    showTranslateArrows
+                      ? 'bg-sky-950 text-sky-300 border-sky-500 shadow-xs'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                  title="Toggle On-Screen UDLR Translation Arrows (D-Pad)"
+                >
+                  <Move className="w-3 h-3 text-sky-400" />
+                  <span>{showTranslateArrows ? 'Arrows ON' : 'Arrows'}</span>
+                </button>
+              )}
+            </div>
 
             {/* Position X (Lateral) */}
             <div>
